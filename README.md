@@ -1,46 +1,103 @@
-# go-musthave-metrics-tpl
+# alex-metrics-service
 
-Шаблон репозитория для трека «Сервер сбора метрик и алертинга».
+Сервис сбора runtime-метрик: HTTP-сервер хранит gauge/counter, агент периодически снимает `runtime.MemStats` и отправляет их на сервер.
 
-## Начало работы
+Часть трека Яндекс.Практикума «Сервер сбора метрик и алертинга».
 
-1. Склонируйте репозиторий в любую подходящую директорию на вашем компьютере.
-2. В корне репозитория выполните команду `go mod init <name>` (где `<name>` — адрес вашего репозитория на GitHub без префикса `https://`) для создания модуля.
+## Требования
 
-## Обновление шаблона
+- Go 1.26+
 
-Чтобы иметь возможность получать обновления автотестов и других частей шаблона, выполните команду:
+## Быстрый старт
 
-```
-git remote add -m v2 template https://github.com/Yandex-Practicum/go-musthave-metrics-tpl.git
-```
+```bash
+# сервер (по умолчанию localhost:8080)
+go run ./cmd/server
 
-Для обновления кода автотестов выполните команду:
-
-```
-git fetch template && git checkout template/v2 .github
+# агент (в другом терминале)
+go run ./cmd/agent
 ```
 
-Затем добавьте полученные изменения в свой репозиторий.
+Сборка:
 
-## Запуск автотестов
+```bash
+go build -o bin/server ./cmd/server
+go build -o bin/agent ./cmd/agent
+```
 
-Для успешного запуска автотестов называйте ветки `iter<number>`, где `<number>` — порядковый номер инкремента. Например, в ветке с названием `iter4` запустятся автотесты для инкрементов с первого по четвёртый.
+## Флаги
 
-При мёрже ветки с инкрементом в основную ветку `main` будут запускаться все автотесты.
+| Флаг | По умолчанию | Описание |
+|------|--------------|----------|
+| `-a` | `localhost:8080` | адрес сервера (listen для server, target для agent) |
+| `-p` | `2s` | интервал опроса метрик агентом |
+| `-r` | `10s` | интервал отправки метрик на сервер |
 
-Подробнее про локальный и автоматический запуск читайте в [README автотестов](https://github.com/Yandex-Practicum/go-autotests).
+Примеры:
 
-## Структура проекта
+```bash
+go run ./cmd/server -a localhost:8080
+go run ./cmd/agent -a localhost:8080 -p 2s -r 10s
+```
 
-Приведённая в этом репозитории структура проекта является рекомендуемой, но не обязательной.
+## HTTP API
 
-Это лишь пример организации кода, который поможет вам в реализации сервиса.
+| Метод | Путь | Описание |
+|-------|------|----------|
+| `POST` | `/update/{type}/{name}/{value}` | обновить метрику (`gauge` / `counter`) |
+| `GET` | `/value/{type}/{name}` | получить значение метрики |
+| `GET` | `/` | HTML-список всех метрик |
 
-При необходимости можно вносить изменения в структуру проекта, использовать любые библиотеки и предпочитаемые структурные паттерны организации кода приложения, например:
-- **DDD** (Domain-Driven Design)
-- **Clean Architecture**
-- **Hexagonal Architecture**
-- **Layered Architecture**
+Примеры:
 
-## Структура проекта
+```bash
+# counter
+curl -X POST http://localhost:8080/update/counter/PollCount/1
+curl http://localhost:8080/value/counter/PollCount
+
+# gauge
+curl -X POST http://localhost:8080/update/gauge/Alloc/12345.6
+curl http://localhost:8080/value/gauge/Alloc
+
+# все метрики
+curl http://localhost:8080/
+```
+
+Типы метрик:
+
+- **counter** — целое число, при обновлении **суммируется** с текущим значением
+- **gauge** — число с плавающей точкой, при обновлении **перезаписывается**
+
+## Структура
+
+```
+cmd/
+  server/          # точка входа сервера
+  agent/           # точка входа агента
+internal/
+  app/             # сборка и запуск HTTP-сервера
+  agent/           # обёртка агента
+  config/          # флаги конфигурации
+  handler/         # HTTP-handlers + HTML-шаблоны
+  service/         # бизнес-логика метрик и агента
+  repository/      # доступ к хранилищу
+  storage/         # in-memory storage
+  model/           # модели метрик
+```
+
+## Тесты
+
+```bash
+go test ./...
+```
+
+Локальные автотесты Практикума (бинарник в корне репозитория):
+
+```bash
+./metricstest-darwin-arm64 -test.v -test.run=^TestIteration1$ \
+  -agent-binary-path=cmd/agent/agent \
+  -binary-path=cmd/server/server \
+  -source-path=.
+```
+
+Ветки для CI называйте `iterN` (например `iter3`) — так запускаются автотесты инкрементов с 1 по N. Подробнее: [go-autotests](https://github.com/Yandex-Practicum/go-autotests).

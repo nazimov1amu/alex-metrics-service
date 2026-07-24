@@ -1,8 +1,11 @@
 package main
 
-import "github.com/Alexunder2003/alex-metrics-service/internal/app"
+import (
+	"github.com/Alexunder2003/alex-metrics-service/internal/agent"
+	"github.com/Alexunder2003/alex-metrics-service/internal/config"
+)
 
 func main() {
-	app := app.NewApp()
-	app.Run()
+	cfg := config.NewConfig()
+	agent.NewAgent(cfg).Run()
 }
