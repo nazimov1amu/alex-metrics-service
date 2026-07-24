@@ -26,3 +26,10 @@ func (s *MemStorage[T]) Update(key string, value T) error {
 	return nil
 }
 
+func (s *MemStorage[T]) GetBulk() ([]T, error) {
+	values := make([]T, 0, len(s.storage))
+	for _, value := range s.storage {
+		values = append(values, value)
+	}
+	return values, nil
+}

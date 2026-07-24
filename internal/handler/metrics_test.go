@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,103 +12,98 @@ import (
 	"github.com/Alexunder2003/alex-metrics-service/internal/storage"
 )
 
-func TestHandler_Update(t *testing.T) {
+func TestMetricsHandler_Update(t *testing.T) {
 	type want struct {
 		statusCode int
-		response   string
+		body       string
 	}
 	tests := []struct {
 		name  string
-		input model.MetricsInput
+		url   string
 		want  want
 	}{
 		{
-			name:  "valid input",
-			input: model.MetricsInput{Name: "test", MType: model.Counter, RawValue: "1"},
-			want: want{
-				statusCode: http.StatusOK,
-				response:   "",
-			},
+			name: "update counter",
+			url:  "/update/counter/test_counter/100",
+			want: want{statusCode: http.StatusOK, body: "100"},
 		},
 		{
-			name:  "invalid input",
-			input: model.MetricsInput{Name: "test", MType: model.Counter, RawValue: "invalid"},
-			want: want{
-				statusCode: http.StatusBadRequest,
-				response:   "invalid counter value\n",
-			},
+			name: "update gauge",
+			url:  "/update/gauge/test_gauge/100.5",
+			want: want{statusCode: http.StatusOK, body: "100.500000"},
 		},
 		{
-			name:  "invalid type",
-			input: model.MetricsInput{Name: "test", MType: "invalid", RawValue: "1"},
-			want: want{
-				statusCode: http.StatusBadRequest,
-				response:   "invalid metric type\n",
-			},
+			name: "invalid type",
+			url:  "/update/unknown/test/1",
+			want: want{statusCode: http.StatusInternalServerError, body: "invalid metric type\n"},
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			store := storage.NewMemStorage[model.Metrics]()
-			router := NewRouter(Mount{
-				Pattern: "/",
-				Router:  MetricsRouter(New(service.NewMetricsService(store))),
-			})
+	svc := service.NewMetricsService(storage.NewMemStorage[model.Metrics]())
+	r := MetricsRouter(New(svc))
 
-			url := fmt.Sprintf(
-				"/update/%s/%s/%s",
-				test.input.MType,
-				test.input.Name,
-				test.input.RawValue,
-			)
-			r := httptest.NewRequest(http.MethodPost, url, nil)
-			w := httptest.NewRecorder()
-			router.ServeHTTP(w, r)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, tt.url, nil)
 
-			assert.Equal(t, test.want.statusCode, w.Code)
-			assert.Equal(t, test.want.response, w.Body.String())
+			r.ServeHTTP(rec, req)
+
+			assert.Equal(t, tt.want.statusCode, rec.Code)
+			assert.Equal(t, tt.want.body, rec.Body.String())
 		})
 	}
 }
 
-func TestHandler_Get(t *testing.T) {
-	delta := int64(1)
-
+func TestMetricsHandler_Get(t *testing.T) {
 	type want struct {
 		statusCode int
-		response   string
+		body       string
 	}
 	tests := []struct {
-		name    string
-		fixture model.Metrics
-		want    want
+		name       string
+		seedURL    string
+		url        string
+		want       want
 	}{
 		{
-			name:    "valid input",
-			fixture: model.Metrics{ID: "test", MType: model.Counter, Delta: &delta},
-			want: want{
-				statusCode: http.StatusOK,
-				response:   `{"id":"test","type":"counter","delta":1}`,
-			},
+			name:    "get counter",
+			seedURL: "/update/counter/test_counter/100",
+			url:     "/value/counter/test_counter",
+			want:    want{statusCode: http.StatusOK, body: "100"},
+		},
+		{
+			name:    "get gauge",
+			seedURL: "/update/gauge/test_gauge/100.5",
+			url:     "/value/gauge/test_gauge",
+			want:    want{statusCode: http.StatusOK, body: "100.5"},
+		},
+		{
+			name: "metric not found",
+			url:  "/value/counter/missing",
+			want: want{statusCode: http.StatusNotFound, body: "metric not found\n"},
 		},
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			store := storage.NewMemStorage[model.Metrics]()
-			assert.NoError(t, store.Update(test.fixture.ID, test.fixture))
 
-			router := NewRouter(Mount{
-				Pattern: "/",
-				Router:  MetricsRouter(New(service.NewMetricsService(store))),
-			})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := service.NewMetricsService(storage.NewMemStorage[model.Metrics]())
+			r := MetricsRouter(New(svc))
 
-			r := httptest.NewRequest(http.MethodGet, "/value/counter/test", nil)
-			w := httptest.NewRecorder()
-			router.ServeHTTP(w, r)
+			if tt.seedURL != "" {
+				seedRec := httptest.NewRecorder()
+				seedReq := httptest.NewRequest(http.MethodPost, tt.seedURL, nil)
+				r.ServeHTTP(seedRec, seedReq)
+				assert.Equal(t, http.StatusOK, seedRec.Code)
+			}
 
-			assert.Equal(t, test.want.statusCode, w.Code)
-			assert.Equal(t, test.want.response, w.Body.String())
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, tt.url, nil)
+			r.ServeHTTP(rec, req)
+
+			assert.Equal(t, tt.want.statusCode, rec.Code)
+			assert.Equal(t, tt.want.body, rec.Body.String())
 		})
 	}
 }
+

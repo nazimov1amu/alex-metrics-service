@@ -10,7 +10,7 @@ type Agent struct {
 }
 
 func NewAgent(cfg *config.Config) *Agent {
-	return &Agent{agentService: service.NewAgentService(cfg)}
+	return &Agent{agentService: service.NewAgentService(config.NewConfig())}
 }
 
 func (a *Agent) Run() {

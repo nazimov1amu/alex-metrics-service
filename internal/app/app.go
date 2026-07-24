@@ -16,7 +16,9 @@ type App struct {
 	router chi.Router
 }
 
-func NewApp(cfg config.Config) *App {
+func NewApp() *App {
+	cfg := config.NewConfig()
+
 	store := storage.NewMemStorage[model.Metrics]()
 	metricsHandler := handler.New(service.NewMetricsService(store))
 
@@ -24,7 +26,7 @@ func NewApp(cfg config.Config) *App {
 		handler.Mount{Pattern: "/", Router: handler.MetricsRouter(metricsHandler)},
 	)
 
-	return &App{cfg: cfg, router: r}
+	return &App{cfg: *cfg, router: r}
 }
 
 func (a *App) Run() error {

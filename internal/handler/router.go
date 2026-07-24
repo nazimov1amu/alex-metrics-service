@@ -14,6 +14,7 @@ func MetricsRouter(h *Handler) chi.Router {
 
 	r.Post("/update/{type}/{name}/{value}", h.Update)
 	r.Get("/value/{type}/{name}", h.Get)
+	r.Get("/", h.GetBulk)
 
 	return r
 }

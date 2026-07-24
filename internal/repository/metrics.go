@@ -21,3 +21,7 @@ func (r *MetricsRepository) Get(key string) (model.Metrics, error) {
 func (r *MetricsRepository) Update(metric model.Metrics) error {
 	return r.storage.Update(metric.ID, metric)
 }
+
+func (r *MetricsRepository) GetBulk() ([]model.Metrics, error) {
+	return r.storage.GetBulk()
+}

@@ -2,12 +2,18 @@ package service
 
 import (
 	"errors"
-	"fmt"
 	"strconv"
 
 	"github.com/Alexunder2003/alex-metrics-service/internal/model"
 	"github.com/Alexunder2003/alex-metrics-service/internal/repository"
 	"github.com/Alexunder2003/alex-metrics-service/internal/storage"
+)
+
+var (
+	ErrInvalidMetricType = errors.New("invalid metric type")
+	ErrInvalidCounterValue = errors.New("invalid counter value")
+	ErrInvalidGaugeValue = errors.New("invalid gauge value")
+	ErrMetricNotFound = errors.New("metric not found")
 )
 
 type MetricsService struct {
@@ -19,9 +25,9 @@ func NewMetricsService(storage *storage.MemStorage[model.Metrics]) *MetricsServi
 	return &MetricsService{repository: repository}
 }
 
-func (s *MetricsService) Update(input model.MetricsInput) error {
+func (s *MetricsService) Update(input model.MetricsInput) (model.Metrics, error) {
 	if err := input.Validate(); err != nil {
-		return err
+		return model.Metrics{}, err
 	}
 
 	metric := model.Metrics{
@@ -33,7 +39,7 @@ func (s *MetricsService) Update(input model.MetricsInput) error {
 	case model.Counter:
 		delta, err := strconv.ParseInt(input.RawValue, 10, 64)
 		if err != nil {
-			return fmt.Errorf("invalid counter value: %w", err)
+			return model.Metrics{}, ErrInvalidCounterValue
 		}
 
 		key := input.Name
@@ -41,26 +47,35 @@ func (s *MetricsService) Update(input model.MetricsInput) error {
 			delta += *current.Delta
 		}
 		metric.Delta = &delta
-
 	case model.Gauge:
 		value, err := strconv.ParseFloat(input.RawValue, 64)
 		if err != nil {
-			return fmt.Errorf("invalid gauge value: %w", err)
+			return model.Metrics{}, ErrInvalidGaugeValue
 		}
 		metric.Value = &value
-
 	default:
-		return errors.New("invalid metric type")
+		return model.Metrics{}, ErrInvalidMetricType
 	}
 
-	return s.repository.Update(metric)
+	if err := s.repository.Update(metric); err != nil {
+		return model.Metrics{}, err
+	}
+	return metric, nil
 }
 
 
-func (s *MetricsService) Get(id string) (model.Metrics, error) {
-	metric, err := s.repository.Get(id)
+func (s *MetricsService) GetBulk() ([]model.Metrics, error) {
+	metrics, err := s.repository.GetBulk()
 	if err != nil {
-		return model.Metrics{}, errors.New("metric not found")
+		return nil, err
+	}
+	return metrics, nil
+}
+
+func (s *MetricsService) Get(name string) (model.Metrics, error) {
+	metric, err := s.repository.Get(name)
+	if err != nil {
+		return model.Metrics{}, ErrMetricNotFound
 	}
 	return metric, nil
 }
