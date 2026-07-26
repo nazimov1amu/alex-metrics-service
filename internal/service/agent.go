@@ -106,9 +106,8 @@ func (s *AgentService) Run() {
 	fmt.Println("Starting agent service")
 	for {
 		metrics := s.collectRuntimeMetrics()
-		err := s.sendMetrics(metrics)
-		if err != nil {
-			panic(err)
+		if err := s.sendMetrics(metrics); err != nil {
+			fmt.Printf("failed to send metrics: %v\n", err)
 		}
 		time.Sleep(s.config.PollInterval)
 	}

@@ -7,16 +7,26 @@ import (
 )
 
 type Config struct {
-	Address        string        
-	PollInterval   time.Duration 
-	ReportInterval time.Duration 
+	Address        string
+	PollInterval   time.Duration
+	ReportInterval time.Duration
 }
 
 func NewConfig() *Config {
-	var cfg Config
-	flag.StringVar(&cfg.Address, "a", "localhost:8080", "address to listen")
-	flag.DurationVar(&cfg.PollInterval, "p", 2*time.Second, "poll interval (e.g. 2s)")
-	flag.DurationVar(&cfg.ReportInterval, "r", 10*time.Second, "report interval (e.g. 10s)")
+	var (
+		address        string
+		pollInterval   int
+		reportInterval int
+	)
+
+	flag.StringVar(&address, "a", "localhost:8080", "HTTP server address host:port")
+	flag.IntVar(&pollInterval, "p", 2, "poll interval in seconds")
+	flag.IntVar(&reportInterval, "r", 10, "report interval in seconds")
 	flag.Parse()
-	return &cfg
+
+	return &Config{
+		Address:        address,
+		PollInterval:   time.Duration(pollInterval) * time.Second,
+		ReportInterval: time.Duration(reportInterval) * time.Second,
+	}
 }

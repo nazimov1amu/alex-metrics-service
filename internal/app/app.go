@@ -1,6 +1,8 @@
 package app
 
 import (
+	"log"
+	"net"
 	"net/http"
 
 	"github.com/Alexunder2003/alex-metrics-service/internal/config"
@@ -30,5 +32,10 @@ func NewApp() *App {
 }
 
 func (a *App) Run() error {
-	return http.ListenAndServe(a.cfg.Address, a.router)
+	addr := a.cfg.Address
+	if _, port, err := net.SplitHostPort(addr); err == nil {
+		addr = net.JoinHostPort("", port)
+	}
+	log.Printf("starting server on %s (from -a %s)", addr, a.cfg.Address)
+	return http.ListenAndServe(addr, a.router)
 }
