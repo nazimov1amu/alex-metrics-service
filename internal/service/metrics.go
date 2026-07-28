@@ -26,10 +26,6 @@ func NewMetricsService(storage *storage.MemStorage[model.Metrics]) *MetricsServi
 }
 
 func (s *MetricsService) Update(input model.MetricsInput) (model.Metrics, error) {
-	if err := input.Validate(); err != nil {
-		return model.Metrics{}, err
-	}
-
 	metric := model.Metrics{
 		ID:    input.Name,
 		MType: input.MType,

@@ -38,7 +38,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInvalidMetricType):
-			http.Error(w, err.Error(), http.StatusNotFound)
+			http.Error(w, err.Error(), http.StatusBadRequest)
 		case errors.Is(err, service.ErrInvalidCounterValue):
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		case errors.Is(err, service.ErrInvalidGaugeValue):

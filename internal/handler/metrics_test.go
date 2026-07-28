@@ -35,7 +35,7 @@ func TestMetricsHandler_Update(t *testing.T) {
 		{
 			name: "invalid type",
 			url:  "/update/unknown/test/1",
-			want: want{statusCode: http.StatusInternalServerError, body: "invalid metric type\n"},
+			want: want{statusCode: http.StatusBadRequest, body: "invalid metric type\n"},
 		},
 	}
 

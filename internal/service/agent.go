@@ -74,17 +74,8 @@ func (s *AgentService) sendMetrics(metrics map[string]float64) error {
 	for name, value := range metrics {
 		endpoint := fmt.Sprintf("http://%s/update/%s/%s/%s", s.config.Address, model.Gauge, name, strconv.FormatFloat(value, 'f', -1, 64))
 	
-		input := model.MetricsInput{
-			Name: name,
-			RawValue: strconv.FormatFloat(value, 'f', -1, 64),
-			MType: model.Gauge,
-		}
-		err := input.Validate()
-		if err != nil {
-			return err
-		}
-
-		resp, err := http.Post(endpoint, "application/plain", bytes.NewBufferString(input.RawValue))
+		rawValue := strconv.FormatFloat(value, 'f', -1, 64)
+		resp, err := http.Post(endpoint, "application/plain", bytes.NewBufferString(rawValue))
 		if err != nil {
 			return err
 		}
