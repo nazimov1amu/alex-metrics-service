@@ -3,10 +3,13 @@ package service
 import (
 	"bytes"
 	"fmt"
+	"log"
+	"maps"
 	"math/rand/v2"
 	"net/http"
 	"runtime"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/Alexunder2003/alex-metrics-service/internal/config"
@@ -15,6 +18,9 @@ import (
 
 type AgentService struct {
 	config *config.Config
+	metrics map[string]float64
+	mu sync.Mutex
+	pollCount int64
 }
 
 func NewAgentService(config *config.Config) *AgentService {
@@ -57,12 +63,14 @@ func (s *AgentService) collectRuntimeMetrics() map[string]float64 {
 }
 
 
-func (s *AgentService) updatePollCount() error {
-	endpoint := fmt.Sprintf("http://%s/update/%s/%s/%s", s.config.Address, model.Counter, "PollCount", "1")
-	resp, err := http.Post(endpoint, "application/plain", bytes.NewBufferString("1"))
+func (s *AgentService) updatePollCount(pollCount int64) error {
+	endpoint := fmt.Sprintf("http://%s/update/%s/%s/%s", s.config.Address, model.Counter, "PollCount", strconv.FormatInt(pollCount, 10))
+	resp, err := http.Post(endpoint, "text/plain", bytes.NewBufferString(strconv.FormatInt(pollCount, 10)))
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to update poll count: %s", resp.Status)
 	}
@@ -70,36 +78,59 @@ func (s *AgentService) updatePollCount() error {
 }
 
 
-func (s *AgentService) sendMetrics(metrics map[string]float64) error {
+func (s *AgentService) sendMetrics(metrics map[string]float64, pollCount int64) error {
 	for name, value := range metrics {
 		endpoint := fmt.Sprintf("http://%s/update/%s/%s/%s", s.config.Address, model.Gauge, name, strconv.FormatFloat(value, 'f', -1, 64))
 	
 		rawValue := strconv.FormatFloat(value, 'f', -1, 64)
-		resp, err := http.Post(endpoint, "application/plain", bytes.NewBufferString(rawValue))
+		resp, err := http.Post(endpoint, "text/plain", bytes.NewBufferString(rawValue))
 		if err != nil {
+			log.Printf("failed to send metrics %s: %v\n", name, err)
 			return err
 		}
+		defer resp.Body.Close()
+
 		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("failed to send metrics: %s", resp.Status)
+			log.Printf("failed to send metrics %s: %s\n", name, resp.Status)
+			return fmt.Errorf("failed to send metrics %s: %s", name, resp.Status)
 		}
-
-		err = s.updatePollCount()
-		if err != nil {
-			return err
-		}
-
-		time.Sleep(s.config.ReportInterval)
+	}
+	err := s.updatePollCount(pollCount)
+	if err != nil {
+		log.Printf("failed to update poll count: %v\n", err)
+		return err
 	}
 	return nil
 }
 
-func (s *AgentService) Run() {
-	fmt.Println("Starting agent service")
+func (s *AgentService) pollLoop() {
 	for {
-		metrics := s.collectRuntimeMetrics()
-		if err := s.sendMetrics(metrics); err != nil {
-			fmt.Printf("failed to send metrics: %v\n", err)
-		}
 		time.Sleep(s.config.PollInterval)
+		metrics := s.collectRuntimeMetrics()
+		s.mu.Lock()
+		s.pollCount++
+		s.metrics = metrics
+		s.mu.Unlock()
 	}
+}
+
+func (s *AgentService) reportLoop() {
+	for {
+		time.Sleep(s.config.ReportInterval)
+		s.mu.Lock()
+		snapshot := maps.Clone(s.metrics)
+		pollCount := s.pollCount
+		s.mu.Unlock()
+		if err := s.sendMetrics(snapshot, pollCount); err != nil {
+			log.Printf("failed to send metrics: %v\n", err)
+		}
+		s.pollCount = 0
+	}
+}
+
+func (s *AgentService) Run() {
+	s.metrics = make(map[string]float64)
+	go s.pollLoop()
+	go s.reportLoop()
+	select {}
 }

@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"log"
 	"strconv"
 
 	"github.com/Alexunder2003/alex-metrics-service/internal/model"
@@ -16,8 +17,14 @@ var (
 	ErrMetricNotFound = errors.New("metric not found")
 )
 
+type MetricsRepository interface {
+	Update(metric model.Metrics) error
+	Get(name string) (model.Metrics, error)
+	GetBulk() ([]model.Metrics, error)
+}
+
 type MetricsService struct {
-	repository *repository.MetricsRepository
+	repository MetricsRepository
 }
 
 func NewMetricsService(storage *storage.MemStorage[model.Metrics]) *MetricsService {
@@ -46,10 +53,12 @@ func (s *MetricsService) Update(input model.MetricsInput) (model.Metrics, error)
 	case model.Gauge:
 		value, err := strconv.ParseFloat(input.RawValue, 64)
 		if err != nil {
+			log.Printf("failed to parse gauge value %s: %v\n", input.RawValue, err)
 			return model.Metrics{}, ErrInvalidGaugeValue
 		}
 		metric.Value = &value
 	default:
+		log.Printf("failed to update metric %s: %v\n", input.Name, ErrInvalidMetricType)
 		return model.Metrics{}, ErrInvalidMetricType
 	}
 
@@ -63,6 +72,7 @@ func (s *MetricsService) Update(input model.MetricsInput) (model.Metrics, error)
 func (s *MetricsService) GetBulk() ([]model.Metrics, error) {
 	metrics, err := s.repository.GetBulk()
 	if err != nil {
+		log.Printf("failed to get bulk metrics: %v\n", err)
 		return nil, err
 	}
 	return metrics, nil
@@ -71,6 +81,7 @@ func (s *MetricsService) GetBulk() ([]model.Metrics, error) {
 func (s *MetricsService) Get(name string) (model.Metrics, error) {
 	metric, err := s.repository.Get(name)
 	if err != nil {
+		log.Printf("failed to get metric %s: %v\n", name, err)
 		return model.Metrics{}, ErrMetricNotFound
 	}
 	return metric, nil

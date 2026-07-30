@@ -18,12 +18,17 @@ var templatesFS embed.FS
 
 var metricsTmpl = template.Must(template.ParseFS(templatesFS, "templates/*.html"))
 
-
-type Handler struct {
-	svc *service.MetricsService
+type MetricsService interface {
+	Update(input model.MetricsInput) (model.Metrics, error)
+	Get(name string) (model.Metrics, error)
+	GetBulk() ([]model.Metrics, error)
 }
 
-func New(svc *service.MetricsService) *Handler {
+type Handler struct {
+	svc MetricsService
+}
+
+func New(svc MetricsService) *Handler {
 	return &Handler{svc: svc}
 }
 
@@ -44,7 +49,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, service.ErrInvalidGaugeValue):
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		default:
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		}
 		return
 	}
@@ -69,7 +74,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, service.ErrMetricNotFound):
 			http.Error(w, err.Error(), http.StatusNotFound)
 		default:
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		}
 		return
 	}
@@ -86,7 +91,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetBulk(w http.ResponseWriter, r *http.Request)  {
 	metrics, err := h.svc.GetBulk()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
@@ -94,7 +99,7 @@ func (h *Handler) GetBulk(w http.ResponseWriter, r *http.Request)  {
 	w.WriteHeader(http.StatusOK)
 	err = metricsTmpl.Execute(w, metrics)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 

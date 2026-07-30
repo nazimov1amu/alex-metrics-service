@@ -39,11 +39,12 @@ func TestMetricsHandler_Update(t *testing.T) {
 		},
 	}
 
-	svc := service.NewMetricsService(storage.NewMemStorage[model.Metrics]())
-	r := MetricsRouter(New(svc))
+
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			svc := service.NewMetricsService(storage.NewMemStorage[model.Metrics]())
+			r := MetricsRouter(New(svc))
 			rec := httptest.NewRecorder()
 			req := httptest.NewRequest(http.MethodPost, tt.url, nil)
 
@@ -89,7 +90,6 @@ func TestMetricsHandler_Get(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := service.NewMetricsService(storage.NewMemStorage[model.Metrics]())
 			r := MetricsRouter(New(svc))
-
 			if tt.seedURL != "" {
 				seedRec := httptest.NewRecorder()
 				seedReq := httptest.NewRequest(http.MethodPost, tt.seedURL, nil)
