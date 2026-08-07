@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"net/http"
+
 	"github.com/go-chi/chi/v5"
 )
 
@@ -11,7 +13,6 @@ type Mount struct {
 
 func MetricsRouter(h *Handler) chi.Router {
 	r := chi.NewRouter()
-
 	r.Post("/update/{type}/{name}/{value}", h.Update)
 	r.Get("/value/{type}/{name}", h.Get)
 	r.Get("/", h.GetBulk)
@@ -19,8 +20,9 @@ func MetricsRouter(h *Handler) chi.Router {
 	return r
 }
 
-func NewRouter(mounts ...Mount) chi.Router {
+func GlobalRoutes(middleware []func(http.Handler) http.Handler, mounts []Mount) chi.Router {
 	r := chi.NewRouter()
+	r.Use(middleware...)
 	for _, m := range mounts {
 		r.Mount(m.Pattern, m.Router)
 	}

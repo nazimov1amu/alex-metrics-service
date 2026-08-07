@@ -20,15 +20,22 @@ type App struct {
 
 func NewApp() *App {
 	cfg := config.NewConfig()
+	sugar, err := NewLogger()
+	if err != nil {
+		log.Fatalf("failed to create logger: %v", err)
+	}
+
+	mw := []func(http.Handler) http.Handler{
+		LoggingMiddleware(sugar),
+	}
 
 	store := storage.NewMemStorage[model.Metrics]()
+
 	metricsHandler := handler.New(service.NewMetricsService(store))
 
-	r := handler.NewRouter(
-		handler.Mount{Pattern: "/", Router: handler.MetricsRouter(metricsHandler)},
-	)
-
-	return &App{cfg: *cfg, router: r}
+	return &App{cfg: *cfg, router: handler.GlobalRoutes(mw, []handler.Mount{
+		{Pattern: "/", Router: handler.MetricsRouter(metricsHandler)},
+	})}
 }
 
 func (a *App) Run() error {

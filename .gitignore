@@ -27,3 +27,6 @@ vendor/
 server
 http_client
 metricstest-darwin-arm64
+.env
+
+info.log
