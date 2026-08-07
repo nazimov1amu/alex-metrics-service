@@ -7,6 +7,7 @@ import (
 
 	"github.com/Alexunder2003/alex-metrics-service/internal/model"
 	"github.com/Alexunder2003/alex-metrics-service/internal/storage"
+	"go.uber.org/zap"
 )
 
 func ptr[T any](v T) *T {
@@ -45,7 +46,7 @@ func TestMetricsService_Update(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store := storage.NewMemStorage[model.Metrics]()
-			svc := NewMetricsService(store)
+			svc := NewMetricsService(store, zap.NewNop().Sugar())
 
 			got, err := svc.Update(tt.input)
 			if tt.wantErr == nil {
@@ -92,7 +93,7 @@ func TestMetricsService_Get(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store := storage.NewMemStorage[model.Metrics]()
-			svc := NewMetricsService(store)
+			svc := NewMetricsService(store, zap.NewNop().Sugar())
 
 			if tt.input != (model.MetricsInput{}) {
 				_, err := svc.Update(tt.input)
@@ -156,7 +157,7 @@ func TestMetricsService_GetBulk(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store := storage.NewMemStorage[model.Metrics]()
-			svc := NewMetricsService(store)
+			svc := NewMetricsService(store, zap.NewNop().Sugar())
 
 			for _, input := range tt.inputs {
 				_, err := svc.Update(input)

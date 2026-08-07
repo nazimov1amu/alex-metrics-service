@@ -11,11 +11,13 @@ import (
 	"github.com/Alexunder2003/alex-metrics-service/internal/service"
 	"github.com/Alexunder2003/alex-metrics-service/internal/storage"
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 )
 
 type App struct {
 	cfg    config.Config
 	router chi.Router
+	logger *zap.SugaredLogger
 }
 
 func NewApp() *App {
@@ -30,12 +32,13 @@ func NewApp() *App {
 	}
 
 	store := storage.NewMemStorage[model.Metrics]()
+	metricsService := service.NewMetricsService(store, sugar)
+	metricsHandler := handler.NewMetricsHandler(metricsService)
+	metricsRouter := handler.MetricsRouter(metricsHandler)
 
-	metricsHandler := handler.New(service.NewMetricsService(store))
-
-	return &App{cfg: *cfg, router: handler.GlobalRoutes(mw, []handler.Mount{
-		{Pattern: "/", Router: handler.MetricsRouter(metricsHandler)},
-	})}
+	return &App{cfg: *cfg, router: handler.NewGlobalRouter(mw, []handler.Mount{
+		{Pattern: "/", Router: metricsRouter},
+	}), logger: sugar}
 }
 
 func (a *App) Run() error {
@@ -43,6 +46,6 @@ func (a *App) Run() error {
 	if _, port, err := net.SplitHostPort(addr); err == nil {
 		addr = net.JoinHostPort("", port)
 	}
-	log.Printf("starting server on %s (from -a %s)", addr, a.cfg.Address)
+	a.logger.Infof("starting server on %s (from -a %s)", addr, a.cfg.Address)
 	return http.ListenAndServe(addr, a.router)
 }

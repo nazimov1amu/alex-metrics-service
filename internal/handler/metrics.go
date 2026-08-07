@@ -28,7 +28,7 @@ type Handler struct {
 	svc MetricsService
 }
 
-func New(svc MetricsService) *Handler {
+func NewMetricsHandler(svc MetricsService) *Handler {
 	return &Handler{svc: svc}
 }
 

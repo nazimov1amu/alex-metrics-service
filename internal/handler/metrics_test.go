@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
 
 	"github.com/Alexunder2003/alex-metrics-service/internal/model"
 	"github.com/Alexunder2003/alex-metrics-service/internal/service"
@@ -43,8 +44,8 @@ func TestMetricsHandler_Update(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc := service.NewMetricsService(storage.NewMemStorage[model.Metrics]())
-			r := MetricsRouter(New(svc))
+			svc := service.NewMetricsService(storage.NewMemStorage[model.Metrics](), zap.NewNop().Sugar())
+			r := MetricsRouter(NewMetricsHandler(svc))
 			rec := httptest.NewRecorder()
 			req := httptest.NewRequest(http.MethodPost, tt.url, nil)
 
@@ -88,8 +89,8 @@ func TestMetricsHandler_Get(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc := service.NewMetricsService(storage.NewMemStorage[model.Metrics]())
-			r := MetricsRouter(New(svc))
+			svc := service.NewMetricsService(storage.NewMemStorage[model.Metrics](), zap.NewNop().Sugar())
+			r := MetricsRouter(NewMetricsHandler(svc))
 			if tt.seedURL != "" {
 				seedRec := httptest.NewRecorder()
 				seedReq := httptest.NewRequest(http.MethodPost, tt.seedURL, nil)

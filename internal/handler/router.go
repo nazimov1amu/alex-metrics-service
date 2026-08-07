@@ -20,7 +20,7 @@ func MetricsRouter(h *Handler) chi.Router {
 	return r
 }
 
-func GlobalRoutes(middleware []func(http.Handler) http.Handler, mounts []Mount) chi.Router {
+func NewGlobalRouter(middleware []func(http.Handler) http.Handler, mounts []Mount) chi.Router {
 	r := chi.NewRouter()
 	r.Use(middleware...)
 	for _, m := range mounts {
