@@ -17,9 +17,9 @@ type Config struct {
 }
 
 type ConfigVars struct {
-	Address        string
-	PollInterval   int
-	ReportInterval int
+	Address        string `env:"ADDRESS"`
+	PollInterval   int    `env:"POLL_INTERVAL"`
+	ReportInterval int    `env:"REPORT_INTERVAL"`
 }
 
 func NewConfig() *Config {

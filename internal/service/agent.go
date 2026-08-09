@@ -2,13 +2,14 @@ package service
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"maps"
 	"math/rand/v2"
 	"net/http"
 	"runtime"
-	"strconv"
 	"sync"
 	"time"
 
@@ -17,9 +18,9 @@ import (
 )
 
 type AgentService struct {
-	config *config.Config
-	metrics map[string]float64
-	mu sync.Mutex
+	config    *config.Config
+	metrics   map[string]float64
+	mu        sync.Mutex
 	pollCount int64
 }
 
@@ -29,7 +30,7 @@ func NewAgentService(config *config.Config) *AgentService {
 
 func (s *AgentService) collectRuntimeMetrics() map[string]float64 {
 	var m runtime.MemStats
-	runtime.ReadMemStats(&m) 
+	runtime.ReadMemStats(&m)
 	return map[string]float64{
 		"Alloc":         float64(m.Alloc),
 		"BuckHashSys":   float64(m.BuckHashSys),
@@ -62,41 +63,45 @@ func (s *AgentService) collectRuntimeMetrics() map[string]float64 {
 	}
 }
 
+func (s *AgentService) postMetric(metric model.Metrics) error {
+	body, err := json.Marshal(metric)
+	if err != nil {
+		return err
+	}
 
-func (s *AgentService) updatePollCount(pollCount int64) error {
-	endpoint := fmt.Sprintf("http://%s/update/%s/%s/%s", s.config.Address, model.Counter, "PollCount", strconv.FormatInt(pollCount, 10))
-	resp, err := http.Post(endpoint, "text/plain", bytes.NewBufferString(strconv.FormatInt(pollCount, 10)))
+	endpoint := fmt.Sprintf("http://%s/update/", s.config.Address)
+	resp, err := http.Post(endpoint, "application/json", bytes.NewBuffer(body))
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to update poll count: %s", resp.Status)
+		return fmt.Errorf("failed to send metric %s: %s", metric.ID, resp.Status)
 	}
 	return nil
 }
 
-
 func (s *AgentService) sendMetrics(metrics map[string]float64, pollCount int64) error {
 	for name, value := range metrics {
-		endpoint := fmt.Sprintf("http://%s/update/%s/%s/%s", s.config.Address, model.Gauge, name, strconv.FormatFloat(value, 'f', -1, 64))
-	
-		rawValue := strconv.FormatFloat(value, 'f', -1, 64)
-		resp, err := http.Post(endpoint, "text/plain", bytes.NewBufferString(rawValue))
-		if err != nil {
+		v := value
+		if err := s.postMetric(model.Metrics{
+			ID:    name,
+			MType: model.Gauge,
+			Value: &v,
+		}); err != nil {
 			log.Printf("failed to send metrics %s: %v\n", name, err)
 			return err
 		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			log.Printf("failed to send metrics %s: %s\n", name, resp.Status)
-			return fmt.Errorf("failed to send metrics %s: %s", name, resp.Status)
-		}
 	}
-	err := s.updatePollCount(pollCount)
-	if err != nil {
+
+	delta := pollCount
+	if err := s.postMetric(model.Metrics{
+		ID:    "PollCount",
+		MType: model.Counter,
+		Delta: &delta,
+	}); err != nil {
 		log.Printf("failed to update poll count: %v\n", err)
 		return err
 	}
@@ -120,11 +125,11 @@ func (s *AgentService) reportLoop() {
 		s.mu.Lock()
 		snapshot := maps.Clone(s.metrics)
 		pollCount := s.pollCount
+		s.pollCount = 0
 		s.mu.Unlock()
 		if err := s.sendMetrics(snapshot, pollCount); err != nil {
 			log.Printf("failed to send metrics: %v\n", err)
 		}
-		s.pollCount = 0
 	}
 }
 

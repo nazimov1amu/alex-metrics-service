@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/Alexunder2003/alex-metrics-service/internal/model"
 	"github.com/Alexunder2003/alex-metrics-service/internal/storage"
@@ -17,29 +18,24 @@ func ptr[T any](v T) *T {
 func TestMetricsService_Update(t *testing.T) {
 	tests := []struct {
 		name    string
-		input   model.MetricsInput
+		metric  *model.Metrics
 		want    model.Metrics
 		wantErr error
 	}{
 		{
-			name:  "update counter",
-			input: model.MetricsInput{Name: "test_counter", MType: model.Counter, RawValue: "100"},
-			want:  model.Metrics{ID: "test_counter", MType: model.Counter, Delta: ptr(int64(100))},
+			name:   "update counter",
+			metric: &model.Metrics{ID: "test_counter", MType: model.Counter, Delta: ptr(int64(100))},
+			want:   model.Metrics{ID: "test_counter", MType: model.Counter, Delta: ptr(int64(100))},
 		},
 		{
-			name:  "update gauge",
-			input: model.MetricsInput{Name: "test_gauge", MType: model.Gauge, RawValue: "100.5"},
-			want:  model.Metrics{ID: "test_gauge", MType: model.Gauge, Value: ptr(float64(100.5))},
+			name:   "update gauge",
+			metric: &model.Metrics{ID: "test_gauge", MType: model.Gauge, Value: ptr(float64(100.5))},
+			want:   model.Metrics{ID: "test_gauge", MType: model.Gauge, Value: ptr(float64(100.5))},
 		},
 		{
-			name:    "update counter with wrong value",
-			input:   model.MetricsInput{Name: "test_counter", MType: model.Counter, RawValue: "asdf"},
-			wantErr: ErrInvalidCounterValue,
-		},
-		{
-			name:    "update gauge with negative value",
-			input:   model.MetricsInput{Name: "test_gauge", MType: model.Gauge, RawValue: "asdf"},
-			wantErr: ErrInvalidGaugeValue,
+			name:    "update with invalid type",
+			metric:  &model.Metrics{ID: "test", MType: "unknown", Value: ptr(float64(1))},
+			wantErr: ErrInvalidMetricType,
 		},
 	}
 
@@ -48,44 +44,62 @@ func TestMetricsService_Update(t *testing.T) {
 			store := storage.NewMemStorage[model.Metrics]()
 			svc := NewMetricsService(store, zap.NewNop().Sugar())
 
-			got, err := svc.Update(tt.input)
-			if tt.wantErr == nil {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.want, got)
-			} else {
-				assert.Error(t, err)
+			err := svc.Update(tt.metric)
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+				return
 			}
 
-			stored, err := svc.Get(tt.input.Name)
-			if tt.wantErr == nil {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.want, stored)
-			} else {
-				assert.Error(t, err)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, *tt.metric)
+
+			got, err := svc.Get(tt.metric.ID)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestMetricsService_Update_CounterAccumulates(t *testing.T) {
+	store := storage.NewMemStorage[model.Metrics]()
+	svc := NewMetricsService(store, zap.NewNop().Sugar())
+
+	first := &model.Metrics{ID: "poll", MType: model.Counter, Delta: ptr(int64(10))}
+	require.NoError(t, svc.Update(first))
+	assert.Equal(t, int64(10), *first.Delta)
+
+	second := &model.Metrics{ID: "poll", MType: model.Counter, Delta: ptr(int64(5))}
+	require.NoError(t, svc.Update(second))
+	assert.Equal(t, int64(15), *second.Delta)
+
+	got, err := svc.Get("poll")
+	require.NoError(t, err)
+	assert.Equal(t, int64(15), *got.Delta)
 }
 
 func TestMetricsService_Get(t *testing.T) {
 	tests := []struct {
 		name    string
-		input   model.MetricsInput
+		seed    *model.Metrics
+		query   model.Metrics
 		want    model.Metrics
 		wantErr error
 	}{
 		{
 			name:  "get counter",
-			input: model.MetricsInput{Name: "test_counter", MType: model.Counter, RawValue: "100"},
+			seed:  &model.Metrics{ID: "test_counter", MType: model.Counter, Delta: ptr(int64(100))},
+			query: model.Metrics{ID: "test_counter"},
 			want:  model.Metrics{ID: "test_counter", MType: model.Counter, Delta: ptr(int64(100))},
 		},
 		{
 			name:  "get gauge",
-			input: model.MetricsInput{Name: "test_gauge", MType: model.Gauge, RawValue: "100.5"},
+			seed:  &model.Metrics{ID: "test_gauge", MType: model.Gauge, Value: ptr(float64(100.5))},
+			query: model.Metrics{ID: "test_gauge"},
 			want:  model.Metrics{ID: "test_gauge", MType: model.Gauge, Value: ptr(float64(100.5))},
 		},
 		{
-			name:    "get counter not found",
+			name:    "get not found",
+			query:   model.Metrics{ID: "missing"},
 			wantErr: ErrMetricNotFound,
 		},
 	}
@@ -95,78 +109,18 @@ func TestMetricsService_Get(t *testing.T) {
 			store := storage.NewMemStorage[model.Metrics]()
 			svc := NewMetricsService(store, zap.NewNop().Sugar())
 
-			if tt.input != (model.MetricsInput{}) {
-				_, err := svc.Update(tt.input)
-				assert.NoError(t, err)
+			if tt.seed != nil {
+				require.NoError(t, svc.Update(tt.seed))
 			}
 
-			stored, err := svc.Get(tt.input.Name)
+			got, err := svc.Get(tt.query.ID)
 			if tt.wantErr != nil {
-				assert.Error(t, err)
+				assert.ErrorIs(t, err, tt.wantErr)
 				return
 			}
 
-			assert.NoError(t, err)
-			assert.Equal(t, tt.want, stored)
-		})
-	}
-}
-
-func TestMetricsService_GetBulk(t *testing.T) {
-	tests := []struct {
-		name   string
-		inputs []model.MetricsInput
-		want   []model.Metrics
-	}{
-		{
-			name:   "empty storage",
-			inputs: nil,
-			want:   []model.Metrics{},
-		},
-		{
-			name: "single counter",
-			inputs: []model.MetricsInput{
-				{Name: "test_counter", MType: model.Counter, RawValue: "100"},
-			},
-			want: []model.Metrics{
-				{ID: "test_counter", MType: model.Counter, Delta: ptr(int64(100))},
-			},
-		},
-		{
-			name: "single gauge",
-			inputs: []model.MetricsInput{
-				{Name: "test_gauge", MType: model.Gauge, RawValue: "100.5"},
-			},
-			want: []model.Metrics{
-				{ID: "test_gauge", MType: model.Gauge, Value: ptr(float64(100.5))},
-			},
-		},
-		{
-			name: "multiple metrics",
-			inputs: []model.MetricsInput{
-				{Name: "test_counter", MType: model.Counter, RawValue: "100"},
-				{Name: "test_gauge", MType: model.Gauge, RawValue: "100.5"},
-			},
-			want: []model.Metrics{
-				{ID: "test_counter", MType: model.Counter, Delta: ptr(int64(100))},
-				{ID: "test_gauge", MType: model.Gauge, Value: ptr(float64(100.5))},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			store := storage.NewMemStorage[model.Metrics]()
-			svc := NewMetricsService(store, zap.NewNop().Sugar())
-
-			for _, input := range tt.inputs {
-				_, err := svc.Update(input)
-				assert.NoError(t, err)
-			}
-
-			got, err := svc.GetBulk()
-			assert.NoError(t, err)
-			assert.ElementsMatch(t, tt.want, got)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }

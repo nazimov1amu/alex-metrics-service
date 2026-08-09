@@ -2,7 +2,6 @@ package service
 
 import (
 	"errors"
-	"strconv"
 
 	"github.com/Alexunder2003/alex-metrics-service/internal/model"
 	"github.com/Alexunder2003/alex-metrics-service/internal/repository"
@@ -11,21 +10,21 @@ import (
 )
 
 var (
-	ErrInvalidMetricType = errors.New("invalid metric type")
+	ErrInvalidMetricType   = errors.New("invalid metric type")
 	ErrInvalidCounterValue = errors.New("invalid counter value")
-	ErrInvalidGaugeValue = errors.New("invalid gauge value")
-	ErrMetricNotFound = errors.New("metric not found")
+	ErrInvalidGaugeValue   = errors.New("invalid gauge value")
+	ErrMetricNotFound      = errors.New("metric not found")
 )
 
 type MetricsRepository interface {
 	Update(metric model.Metrics) error
-	Get(name string) (model.Metrics, error)
+	Get(id string) (model.Metrics, error)
 	GetBulk() ([]model.Metrics, error)
 }
 
 type MetricsService struct {
 	repository MetricsRepository
-	logger *zap.SugaredLogger
+	logger     *zap.SugaredLogger
 }
 
 func NewMetricsService(storage *storage.MemStorage[model.Metrics], logger *zap.SugaredLogger) *MetricsService {
@@ -33,59 +32,40 @@ func NewMetricsService(storage *storage.MemStorage[model.Metrics], logger *zap.S
 	return &MetricsService{repository: repository, logger: logger}
 }
 
-func (s *MetricsService) Update(input model.MetricsInput) (model.Metrics, error) {
-	metric := model.Metrics{
-		ID:    input.Name,
-		MType: input.MType,
-	}
-
-	switch input.MType {
+func (s *MetricsService) Update(metric *model.Metrics) error {
+	switch metric.MType {
 	case model.Counter:
-		delta, err := strconv.ParseInt(input.RawValue, 10, 64)
-		if err != nil {
-			s.logger.Error("failed to parse counter value", zap.Error(err))
-			return model.Metrics{}, ErrInvalidCounterValue
+		if metric.Delta == nil {
+			return ErrInvalidCounterValue
 		}
-
-		key := input.Name
-		if current, err := s.repository.Get(key); err == nil {
-			delta += *current.Delta
+		existing, err := s.repository.Get(metric.ID)
+		if err == nil && existing.Delta != nil {
+			*metric.Delta += *existing.Delta
 		}
-		metric.Delta = &delta
 	case model.Gauge:
-		value, err := strconv.ParseFloat(input.RawValue, 64)
-		if err != nil {
-			s.logger.Error("failed to parse gauge value", zap.Error(err))
-			return model.Metrics{}, ErrInvalidGaugeValue
+		if metric.Value == nil {
+			return ErrInvalidGaugeValue
 		}
-		metric.Value = &value
 	default:
-		s.logger.Error("failed to update metric", zap.String("name", input.Name), zap.Error(ErrInvalidMetricType))
-		return model.Metrics{}, ErrInvalidMetricType
+		return ErrInvalidMetricType
 	}
 
-	if err := s.repository.Update(metric); err != nil {
-		s.logger.Error("failed to update metric", zap.String("name", input.Name), zap.Error(err))
-		return model.Metrics{}, err
+	if err := s.repository.Update(*metric); err != nil {
+		s.logger.Errorw("failed to update metric", "name", metric.ID, "error", err)
+		return err
 	}
-	return metric, nil
+	return nil
 }
 
-
-func (s *MetricsService) GetBulk() ([]model.Metrics, error) {
-	metrics, err := s.repository.GetBulk()
+func (s *MetricsService) Get(id string) (model.Metrics, error) {
+	got, err := s.repository.Get(id)
 	if err != nil {
-		s.logger.Error("failed to get bulk metrics", zap.Error(err))
-		return nil, err
-	}
-	return metrics, nil
-}
-
-func (s *MetricsService) Get(name string) (model.Metrics, error) {
-	metric, err := s.repository.Get(name)
-	if err != nil {
-		s.logger.Error("failed to get metric", zap.String("name", name), zap.Error(err))
+		s.logger.Errorw("failed to get metric", "name", id, "error", err)
 		return model.Metrics{}, ErrMetricNotFound
 	}
-	return metric, nil
+	return got, nil
+}
+
+func (s *MetricsService) GetBulk() ([]model.Metrics, error) {
+	return s.repository.GetBulk()
 }

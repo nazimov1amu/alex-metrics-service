@@ -13,10 +13,6 @@ type Metrics struct {
 	Hash  string   `json:"hash,omitempty"`
 }
 
-type MetricsInput struct {
-	Name     string
-	MType    string
-	RawValue string
-}
+
 
 
