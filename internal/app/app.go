@@ -6,7 +6,9 @@ import (
 	"net/http"
 
 	"github.com/Alexunder2003/alex-metrics-service/internal/config"
+	"github.com/Alexunder2003/alex-metrics-service/internal/encoding"
 	"github.com/Alexunder2003/alex-metrics-service/internal/handler"
+	"github.com/Alexunder2003/alex-metrics-service/internal/logger"
 	"github.com/Alexunder2003/alex-metrics-service/internal/model"
 	"github.com/Alexunder2003/alex-metrics-service/internal/service"
 	"github.com/Alexunder2003/alex-metrics-service/internal/storage"
@@ -22,13 +24,14 @@ type App struct {
 
 func NewApp() *App {
 	cfg := config.NewConfig()
-	sugar, err := NewLogger()
+	sugar, err := logger.NewLogger()
 	if err != nil {
 		log.Fatalf("failed to create logger: %v", err)
 	}
 
 	mw := []func(http.Handler) http.Handler{
-		LoggingMiddleware(sugar),
+		logger.LoggingMiddleware(sugar),
+		encoding.CompressingMiddleware,
 	}
 
 	store := storage.NewMemStorage[model.Metrics]()

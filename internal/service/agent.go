@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"maps"
 	"math/rand/v2"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Alexunder2003/alex-metrics-service/internal/config"
+	"github.com/Alexunder2003/alex-metrics-service/internal/encoding"
 	"github.com/Alexunder2003/alex-metrics-service/internal/model"
 )
 
@@ -69,13 +69,24 @@ func (s *AgentService) postMetric(metric model.Metrics) error {
 		return err
 	}
 
+	compressed, err := encoding.Compress(body)
+	if err != nil {
+		return err
+	}
+	
 	endpoint := fmt.Sprintf("http://%s/update/", s.config.Address)
-	resp, err := http.Post(endpoint, "application/json", bytes.NewBuffer(body))
+	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(compressed))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Encoding", "gzip")
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to send metric %s: %s", metric.ID, resp.Status)
