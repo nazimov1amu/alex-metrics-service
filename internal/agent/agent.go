@@ -9,7 +9,7 @@ type Agent struct {
 	agentService *service.AgentService
 }
 
-func NewAgent(cfg *config.Config) *Agent {
+func NewAgent(cfg *config.AgentConfig) *Agent {
 	return &Agent{agentService: service.NewAgentService(cfg)}
 }
 

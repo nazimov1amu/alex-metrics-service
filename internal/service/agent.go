@@ -18,13 +18,13 @@ import (
 )
 
 type AgentService struct {
-	config    *config.Config
+	config    *config.AgentConfig
 	metrics   map[string]float64
 	mu        sync.Mutex
 	pollCount int64
 }
 
-func NewAgentService(config *config.Config) *AgentService {
+func NewAgentService(config *config.AgentConfig) *AgentService {
 	return &AgentService{config: config}
 }
 
