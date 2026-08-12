@@ -19,8 +19,8 @@ type AgentConfig struct {
 func NewAgentConfig() *AgentConfig {
 	var (
 		address string
-		pollInterval time.Duration
-		reportInterval time.Duration
+		pollInterval int
+		reportInterval int
 	)
 
 	config := &AgentConfig{}
@@ -30,8 +30,8 @@ func NewAgentConfig() *AgentConfig {
 	}
 
 	flag.StringVar(&address, "a", "localhost:8080", "HTTP server address host:port")
-	flag.DurationVar(&pollInterval, "p", 2*time.Second, "poll interval")
-	flag.DurationVar(&reportInterval, "r", 10*time.Second, "report interval")
+	flag.IntVar(&pollInterval, "p", 2, "poll interval")
+	flag.IntVar(&reportInterval, "r", 10, "report interval")
 	flag.Parse()
 
 	if err := env.Parse(config); err != nil {
@@ -42,10 +42,10 @@ func NewAgentConfig() *AgentConfig {
 		config.Address = address
 	}
 	if config.PollInterval == 0 {
-		config.PollInterval = pollInterval
+		config.PollInterval = time.Duration(pollInterval) * time.Second
 	}
 	if config.ReportInterval == 0 {
-		config.ReportInterval = reportInterval
+		config.ReportInterval = time.Duration(reportInterval) * time.Second	
 	}
 
 	return config

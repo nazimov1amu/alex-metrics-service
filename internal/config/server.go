@@ -4,7 +4,6 @@ package config
 import (
 	"flag"
 	"log"
-	"time"
 
 	"github.com/caarlos0/env/v11"
 	"github.com/joho/godotenv"
@@ -12,7 +11,7 @@ import (
 
 type ServerConfig struct {
 	Address        string `env:"ADDRESS"`
-	StoreInterval time.Duration `env:"STORE_INTERVAL"`
+	StoreInterval int `env:"STORE_INTERVAL"`
 	FileStoragePath string `env:"FILE_STORAGE_PATH"`
 	Restore bool `env:"RESTORE"`
 }
@@ -46,7 +45,7 @@ func NewServerConfig() *ServerConfig {
 		config.Address = address
 	}
 	if config.StoreInterval == 0 {
-		config.StoreInterval = time.Duration(storeInterval) * time.Second
+		config.StoreInterval = storeInterval
 	}
 	if config.FileStoragePath == "" {
 		config.FileStoragePath = fileStoragePath

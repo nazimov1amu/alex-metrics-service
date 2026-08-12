@@ -60,7 +60,7 @@ func (a *App) Run() error {
 
 	go func() {
 		for {
-			time.Sleep(a.cfg.StoreInterval)
+			time.Sleep(time.Duration(a.cfg.StoreInterval) * time.Second)
 			if err := a.metricsService.Store(); err != nil {
 				a.logger.Errorw("failed to store metrics", "error", err)
 			}
