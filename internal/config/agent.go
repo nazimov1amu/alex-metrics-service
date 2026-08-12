@@ -3,7 +3,6 @@ package config
 import (
 	"flag"
 	"log"
-	"time"
 
 	"github.com/caarlos0/env/v11"
 	"github.com/joho/godotenv"
@@ -11,8 +10,8 @@ import (
 
 type AgentConfig struct {
 	Address string `env:"ADDRESS"`
-	PollInterval time.Duration `env:"POLL_INTERVAL"`
-	ReportInterval time.Duration `env:"REPORT_INTERVAL"`
+	PollInterval int `env:"POLL_INTERVAL"`
+	ReportInterval int `env:"REPORT_INTERVAL"`
 }
 
 
@@ -42,10 +41,10 @@ func NewAgentConfig() *AgentConfig {
 		config.Address = address
 	}
 	if config.PollInterval == 0 {
-		config.PollInterval = time.Duration(pollInterval) * time.Second
+		config.PollInterval = pollInterval
 	}
 	if config.ReportInterval == 0 {
-		config.ReportInterval = time.Duration(reportInterval) * time.Second	
+		config.ReportInterval = reportInterval
 	}
 
 	return config

@@ -121,7 +121,7 @@ func (s *AgentService) sendMetrics(metrics map[string]float64, pollCount int64) 
 
 func (s *AgentService) pollLoop() {
 	for {
-		time.Sleep(s.config.PollInterval)
+		time.Sleep(time.Duration(s.config.PollInterval) * time.Second)
 		metrics := s.collectRuntimeMetrics()
 		s.mu.Lock()
 		s.pollCount++
@@ -132,7 +132,7 @@ func (s *AgentService) pollLoop() {
 
 func (s *AgentService) reportLoop() {
 	for {
-		time.Sleep(s.config.ReportInterval)
+		time.Sleep(time.Duration(s.config.ReportInterval) * time.Second)
 		s.mu.Lock()
 		snapshot := maps.Clone(s.metrics)
 		pollCount := s.pollCount
