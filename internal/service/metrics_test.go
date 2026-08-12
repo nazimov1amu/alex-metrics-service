@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/Alexunder2003/alex-metrics-service/internal/config"
 	"github.com/Alexunder2003/alex-metrics-service/internal/model"
 	"github.com/Alexunder2003/alex-metrics-service/internal/storage"
 	"go.uber.org/zap"
@@ -42,7 +43,7 @@ func TestMetricsService_Update(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store := storage.NewMemStorage[model.Metrics]()
-			svc := NewMetricsService(store, zap.NewNop().Sugar())
+			svc := NewMetricsService(store, zap.NewNop().Sugar(), &config.ServerConfig{})
 
 			err := svc.Update(tt.metric)
 			if tt.wantErr != nil {
@@ -62,7 +63,7 @@ func TestMetricsService_Update(t *testing.T) {
 
 func TestMetricsService_Update_CounterAccumulates(t *testing.T) {
 	store := storage.NewMemStorage[model.Metrics]()
-	svc := NewMetricsService(store, zap.NewNop().Sugar())
+	svc := NewMetricsService(store, zap.NewNop().Sugar(), &config.ServerConfig{})
 
 	first := &model.Metrics{ID: "poll", MType: model.Counter, Delta: ptr(int64(10))}
 	require.NoError(t, svc.Update(first))
@@ -107,7 +108,7 @@ func TestMetricsService_Get(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store := storage.NewMemStorage[model.Metrics]()
-			svc := NewMetricsService(store, zap.NewNop().Sugar())
+			svc := NewMetricsService(store, zap.NewNop().Sugar(), &config.ServerConfig{})
 
 			if tt.seed != nil {
 				require.NoError(t, svc.Update(tt.seed))
