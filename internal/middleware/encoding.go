@@ -66,12 +66,12 @@ func isCompressible(contentType string) bool {
 func WithCompressing(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.Header.Get("Content-Encoding"), "gzip") {
+			defer r.Body.Close()
 			decompressed, err := encoding.Decompress(r.Body)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			_ = r.Body.Close()
 			r.Body = decompressed
 		}
 
