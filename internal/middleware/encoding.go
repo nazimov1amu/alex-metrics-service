@@ -60,7 +60,8 @@ func (w *compressorResponseWriter) Close() error {
 
 func isCompressible(contentType string) bool {
 	return strings.Contains(contentType, "text/plain") ||
-		strings.Contains(contentType, "application/json")
+		strings.Contains(contentType, "application/json") ||
+		strings.Contains(contentType, "text/html")
 }
 
 func WithCompressing(next http.Handler) http.Handler {
