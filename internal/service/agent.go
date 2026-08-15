@@ -120,19 +120,19 @@ func (s *AgentService) sendMetrics(metrics map[string]float64, pollCount int64) 
 }
 
 func (s *AgentService) pollLoop() {
-	for {
-		time.Sleep(time.Duration(s.config.PollInterval) * time.Second)
+	ticker := time.NewTicker(time.Duration(s.config.PollInterval) * time.Second)
+	for range ticker.C {
 		metrics := s.collectRuntimeMetrics()
 		s.mu.Lock()
-		s.pollCount++
 		s.metrics = metrics
+		s.pollCount++
 		s.mu.Unlock()
 	}
 }
 
 func (s *AgentService) reportLoop() {
-	for {
-		time.Sleep(time.Duration(s.config.ReportInterval) * time.Second)
+	ticker := time.NewTicker(time.Duration(s.config.ReportInterval) * time.Second)
+	for range ticker.C {
 		s.mu.Lock()
 		snapshot := maps.Clone(s.metrics)
 		pollCount := s.pollCount

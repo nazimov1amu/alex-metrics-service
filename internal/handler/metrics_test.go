@@ -13,6 +13,7 @@ import (
 
 	"github.com/Alexunder2003/alex-metrics-service/internal/config"
 	"github.com/Alexunder2003/alex-metrics-service/internal/model"
+	"github.com/Alexunder2003/alex-metrics-service/internal/repository"
 	"github.com/Alexunder2003/alex-metrics-service/internal/service"
 	"github.com/Alexunder2003/alex-metrics-service/internal/storage"
 )
@@ -20,8 +21,9 @@ import (
 func ptr[T any](v T) *T { return &v }
 
 func newTestRouter() http.Handler {
-	svc := service.NewMetricsService(storage.NewMemStorage[model.Metrics](), zap.NewNop().Sugar(), &config.ServerConfig{})
-	return MetricsRouter(NewMetricsHandler(svc))	
+	repository := repository.NewMetricsRepository(storage.NewMemStorage[model.Metrics]())
+	svc := service.NewMetricsService(repository, &config.ServerConfig{})
+	return MetricsRouter(NewMetricsHandler(svc, zap.NewNop().Sugar()))
 }
 
 func TestMetricsHandler_UpdatePath(t *testing.T) {

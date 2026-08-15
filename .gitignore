@@ -30,3 +30,5 @@ metricstest-darwin-arm64
 .env
 
 info.log
+
+storage.json

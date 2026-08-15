@@ -13,6 +13,7 @@ import (
 	"github.com/Alexunder2003/alex-metrics-service/internal/model"
 	"github.com/Alexunder2003/alex-metrics-service/internal/service"
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 )
 
 //go:embed templates/*.html
@@ -27,11 +28,12 @@ type MetricsService interface {
 }
 
 type Handler struct {
-	svc MetricsService
+	svc    MetricsService
+	logger *zap.SugaredLogger
 }
 
-func NewMetricsHandler(svc MetricsService) *Handler {
-	return &Handler{svc: svc}
+func NewMetricsHandler(svc MetricsService, logger *zap.SugaredLogger) *Handler {
+	return &Handler{svc: svc, logger: logger}
 }
 
 func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
@@ -50,10 +52,11 @@ func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err = h.svc.Update(&metric); err != nil {
-		writeUpdateError(w, err)
+		h.writeError(w, err)
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	writeJSON(w, http.StatusOK, metric)
 }
 
@@ -74,10 +77,11 @@ func (h *Handler) ValueJSON(w http.ResponseWriter, r *http.Request) {
 
 	metric, err = h.svc.Get(metric.ID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		h.writeError(w, err)
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	writeJSON(w, http.StatusOK, metric)
 }
 
@@ -88,14 +92,16 @@ func (h *Handler) UpdatePath(w http.ResponseWriter, r *http.Request) {
 		chi.URLParam(r, "value"),
 	)
 	if err != nil {
-		writeUpdateError(w, err)
+		h.writeError(w, err)
 		return
 	}
 
 	if err = h.svc.Update(&metric); err != nil {
-		writeUpdateError(w, err)
+		h.writeError(w, err)
 		return
 	}
+
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 
 	w.WriteHeader(http.StatusOK)
 	switch metric.MType {
@@ -109,10 +115,11 @@ func (h *Handler) UpdatePath(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ValuePath(w http.ResponseWriter, r *http.Request) {
 	metric, err := h.svc.Get(chi.URLParam(r, "name"))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		h.writeError(w, err)
 		return
 	}
 
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	switch metric.MType {
 	case model.Counter:
@@ -125,14 +132,14 @@ func (h *Handler) ValuePath(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetBulk(w http.ResponseWriter, r *http.Request) {
 	metrics, err := h.svc.GetBulk()
 	if err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		h.writeError(w, err)
 		return
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	if err = metricsTmpl.Execute(w, metrics); err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		h.writeError(w, err)
 	}
 }
 
@@ -157,14 +164,18 @@ func metricFromPath(mType, name, raw string) (model.Metrics, error) {
 	return metric, nil
 }
 
-func writeUpdateError(w http.ResponseWriter, err error) {
+func (h *Handler) writeError(w http.ResponseWriter, err error) {
+	h.logger.Errorw("request failed", "error", err)
 	switch {
-	case errors.Is(err, service.ErrInvalidMetricType),
-		errors.Is(err, service.ErrInvalidCounterValue),
-		errors.Is(err, service.ErrInvalidGaugeValue):
+	case errors.Is(err, service.ErrInvalidMetricType):
 		http.Error(w, err.Error(), http.StatusBadRequest)
+	case errors.Is(err, service.ErrInvalidCounterValue):
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	case errors.Is(err, service.ErrInvalidGaugeValue):
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	case errors.Is(err, service.ErrMetricNotFound):
+		http.Error(w, err.Error(), http.StatusNotFound)
 	default:
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 	}
 }
-

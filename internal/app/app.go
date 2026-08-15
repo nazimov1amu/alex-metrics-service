@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"github.com/Alexunder2003/alex-metrics-service/internal/config"
-	"github.com/Alexunder2003/alex-metrics-service/internal/encoding"
 	"github.com/Alexunder2003/alex-metrics-service/internal/handler"
-	"github.com/Alexunder2003/alex-metrics-service/internal/logger"
+	"github.com/Alexunder2003/alex-metrics-service/internal/middleware"
 	"github.com/Alexunder2003/alex-metrics-service/internal/model"
+	"github.com/Alexunder2003/alex-metrics-service/internal/repository"
 	"github.com/Alexunder2003/alex-metrics-service/internal/service"
 	"github.com/Alexunder2003/alex-metrics-service/internal/storage"
 	"github.com/go-chi/chi/v5"
@@ -22,26 +22,32 @@ type App struct {
 	metricsService *service.MetricsService
 	router chi.Router
 	logger *zap.SugaredLogger
+	store *storage.FileStorage[model.Metrics]
 }
 
 func NewApp() *App {
 	cfg := config.NewServerConfig()
-	sugar, err := logger.NewLogger()
-	if err != nil {
-		log.Fatalf("failed to create logger: %v", err)
-	}
+	logger, err := zap.NewProduction()
+    if err != nil {
+        log.Fatalf("failed to create logger: %v", err)
+    }
+    sugar := logger.Sugar()
 	
 	mw := []func(http.Handler) http.Handler{
-		logger.LoggingMiddleware(sugar),
-		encoding.CompressingMiddleware,
+		middleware.LoggingMiddleware(sugar),
+		middleware.CompressingMiddleware,
 	}
 
-	store := storage.NewMemStorage[model.Metrics]()
-	metricsService := service.NewMetricsService(store, sugar, cfg)
-	metricsHandler := handler.NewMetricsHandler(metricsService)
+	store, err := storage.NewFileStorage[model.Metrics](cfg.FileStoragePath, cfg.Restore, cfg.StoreInterval == 0)
+	if err != nil {
+		log.Fatalf("failed to create file storage: %v", err)
+	}
+	metricsRepository := repository.NewMetricsRepository(store)
+	metricsService := service.NewMetricsService(metricsRepository, cfg)
+	metricsHandler := handler.NewMetricsHandler(metricsService, sugar)
 	metricsRouter := handler.MetricsRouter(metricsHandler)
 
-	return &App{cfg: *cfg, metricsService: metricsService, router: handler.NewGlobalRouter(mw, []handler.Mount{
+	return &App{cfg: *cfg, store: store, metricsService: metricsService, router: handler.NewGlobalRouter(mw, []handler.Mount{
 		{Pattern: "/", Router: metricsRouter},
 	}), logger: sugar}
 }
@@ -52,20 +58,18 @@ func (a *App) Run() error {
 		addr = net.JoinHostPort("", port)
 	}
 
-	if a.cfg.Restore {
-		if err := a.metricsService.Restore(); err != nil {
-			a.logger.Errorw("failed to restore metrics", "error", err)
-		}
+	ticker := time.NewTicker(time.Duration(a.cfg.StoreInterval) * time.Second)
+	defer ticker.Stop()
+	
+	if a.cfg.StoreInterval > 0 {
+		go func() {
+			for range ticker.C {
+				if err := a.store.Store(); err != nil {
+					a.logger.Errorw("failed to store metrics", "error", err)
+				}
+			}	
+		}()
 	}
-
-	go func() {
-		for {
-			time.Sleep(time.Duration(a.cfg.StoreInterval) * time.Second)
-			if err := a.metricsService.Store(); err != nil {
-				a.logger.Errorw("failed to store metrics", "error", err)
-			}
-		}
-	}()
 
 	a.logger.Infof("starting server on %s (from -a %s)", addr, a.cfg.Address)
 	return http.ListenAndServe(addr, a.router)

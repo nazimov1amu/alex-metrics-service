@@ -3,47 +3,47 @@ package config
 import (
 	"flag"
 	"log"
+	"os"
+	"strconv"
 
-	"github.com/caarlos0/env/v11"
 	"github.com/joho/godotenv"
 )
 
 type AgentConfig struct {
-	Address string `env:"ADDRESS"`
-	PollInterval int `env:"POLL_INTERVAL"`
-	ReportInterval int `env:"REPORT_INTERVAL"`
+	Address        string
+	PollInterval   int
+	ReportInterval int
 }
 
-
 func NewAgentConfig() *AgentConfig {
-	var (
-		address string
-		pollInterval int
-		reportInterval int
-	)
-
 	config := &AgentConfig{}
 
-	if err := godotenv.Load("../../.env"); err != nil {
+	flag.StringVar(&config.Address, "a", "localhost:8080", "HTTP server address host:port")
+	flag.IntVar(&config.PollInterval, "p", 2, "poll interval")
+	flag.IntVar(&config.ReportInterval, "r", 10, "report interval")
+	flag.Parse()
+
+	if err := godotenv.Load(".env"); err != nil {
 		log.Printf("failed to load .env file: %v", err)
 	}
 
-	flag.StringVar(&address, "a", "localhost:8080", "HTTP server address host:port")
-	flag.IntVar(&pollInterval, "p", 2, "poll interval")
-	flag.IntVar(&reportInterval, "r", 10, "report interval")
-	flag.Parse()
-
-	if err := env.Parse(config); err != nil {
-		log.Fatalf("failed to parse env config: %v", err)
-	}
-
-	if config.Address == "" {
+	if address, ok := os.LookupEnv("ADDRESS"); ok {
 		config.Address = address
 	}
-	if config.PollInterval == 0 {
+
+	if pollIntervalEnv, ok := os.LookupEnv("POLL_INTERVAL"); ok {
+		pollInterval, err := strconv.Atoi(pollIntervalEnv)
+		if err != nil {
+			log.Fatalf("failed to convert POLL_INTERVAL to int: %v", err)
+		}
 		config.PollInterval = pollInterval
 	}
-	if config.ReportInterval == 0 {
+
+	if reportIntervalEnv, ok := os.LookupEnv("REPORT_INTERVAL"); ok {
+		reportInterval, err := strconv.Atoi(reportIntervalEnv)
+		if err != nil {
+			log.Fatalf("failed to convert REPORT_INTERVAL to int: %v", err)
+		}
 		config.ReportInterval = reportInterval
 	}
 

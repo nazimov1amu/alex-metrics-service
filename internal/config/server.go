@@ -1,56 +1,55 @@
-// internal/config/config.go
 package config
 
 import (
 	"flag"
 	"log"
+	"os"
+	"strconv"
 
-	"github.com/caarlos0/env/v11"
 	"github.com/joho/godotenv"
 )
 
 type ServerConfig struct {
-	Address        string `env:"ADDRESS"`
-	StoreInterval int `env:"STORE_INTERVAL"`
-	FileStoragePath string `env:"FILE_STORAGE_PATH"`
-	Restore bool `env:"RESTORE"`
+	Address         string
+	StoreInterval   int
+	FileStoragePath string
+	Restore         bool
 }
 
-
 func NewServerConfig() *ServerConfig {
-	var (
-		address        string    
-		storeInterval  int
-		fileStoragePath string
-		restore bool
-	)
-
 	config := &ServerConfig{}
 
-	flag.StringVar(&address, "a", "localhost:8080", "HTTP server address host:port")
-	flag.IntVar(&storeInterval, "i", 300, "store interval")
-	flag.StringVar(&fileStoragePath, "f", "storage.json", "file storage path")
-	flag.BoolVar(&restore, "r", false, "restore from file")
+	flag.StringVar(&config.Address, "a", "localhost:8080", "HTTP server address host:port")
+	flag.IntVar(&config.StoreInterval, "i", 300, "store interval")
+	flag.StringVar(&config.FileStoragePath, "f", "storage.json", "file storage path")
+	flag.BoolVar(&config.Restore, "r", false, "restore from file")
 	flag.Parse()
 
-	if err := godotenv.Load("../../.env"); err != nil {
+	if err := godotenv.Load(".env"); err != nil {
 		log.Printf("failed to load .env file: %v", err)
 	}
 
-	if err := env.Parse(config); err != nil {
-		log.Fatalf("failed to parse env config: %v", err)
-	}
-
-	if config.Address == "" {
+	if address, ok := os.LookupEnv("ADDRESS"); ok {
 		config.Address = address
 	}
-	if config.StoreInterval == 0 {
+
+	if storeIntervalEnv, ok := os.LookupEnv("STORE_INTERVAL"); ok {
+		storeInterval, err := strconv.Atoi(storeIntervalEnv)
+		if err != nil {
+			log.Fatalf("failed to convert STORE_INTERVAL to int: %v", err)
+		}
 		config.StoreInterval = storeInterval
 	}
-	if config.FileStoragePath == "" {
+
+	if fileStoragePath, ok := os.LookupEnv("FILE_STORAGE_PATH"); ok {
 		config.FileStoragePath = fileStoragePath
 	}
-	if config.Restore == false {
+
+	if restoreEnv, ok := os.LookupEnv("RESTORE"); ok {
+		restore, err := strconv.ParseBool(restoreEnv)
+		if err != nil {
+			log.Fatalf("failed to convert RESTORE to bool: %v", err)
+		}
 		config.Restore = restore
 	}
 
