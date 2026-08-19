@@ -1,12 +1,14 @@
 package app
 
 import (
+	"database/sql"
 	"log"
 	"net"
 	"net/http"
 	"time"
 
 	"github.com/Alexunder2003/alex-metrics-service/internal/config"
+	"github.com/Alexunder2003/alex-metrics-service/internal/config/db"
 	"github.com/Alexunder2003/alex-metrics-service/internal/handler"
 	"github.com/Alexunder2003/alex-metrics-service/internal/middleware"
 	"github.com/Alexunder2003/alex-metrics-service/internal/model"
@@ -23,16 +25,25 @@ type App struct {
 	router chi.Router
 	logger *zap.SugaredLogger
 	store *storage.FileStorage[model.Metrics]
+	db *sql.DB
 }
 
 func NewApp() *App {
 	cfg := config.NewServerConfig()
+	dbCfg := db.NewDatabaseConfig()
+
+	db := storage.NewDatabase(dbCfg.DatabaseDSN)
+
+	if err := db.Ping(); err != nil {
+		log.Fatalf("failed to ping database: %v", err)
+	}
+
 	logger, err := zap.NewProduction()
     if err != nil {
         log.Fatalf("failed to create logger: %v", err)
     }
     sugar := logger.Sugar()
-	
+
 	mw := []func(http.Handler) http.Handler{
 		middleware.LoggingMiddleware(sugar),
 		middleware.CompressingMiddleware,
@@ -47,8 +58,12 @@ func NewApp() *App {
 	metricsHandler := handler.NewMetricsHandler(metricsService, sugar)
 	metricsRouter := handler.MetricsRouter(metricsHandler)
 
+	healthHandler := handler.NewHealthHandler(db, sugar)
+	healthRouter := handler.HealthRouter(healthHandler)
+
 	return &App{cfg: *cfg, store: store, metricsService: metricsService, router: handler.NewGlobalRouter(mw, []handler.Mount{
 		{Pattern: "/", Router: metricsRouter},
+		{Pattern: "/", Router: healthRouter},
 	}), logger: sugar}
 }
 
@@ -57,7 +72,7 @@ func (a *App) Run() error {
 	if _, port, err := net.SplitHostPort(addr); err == nil {
 		addr = net.JoinHostPort("", port)
 	}
-
+	
 	ticker := time.NewTicker(time.Duration(a.cfg.StoreInterval) * time.Second)
 	defer ticker.Stop()
 	

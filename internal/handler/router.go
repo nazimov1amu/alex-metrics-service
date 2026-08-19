@@ -28,6 +28,12 @@ func MetricsRouter(h *Handler) chi.Router {
 	return r
 }
 
+func HealthRouter(h *HealthHandler) chi.Router {
+	r := chi.NewRouter()
+	r.Get("/ping", h.DBHealthCheck)
+	return r
+}
+
 func NewGlobalRouter(middleware []func(http.Handler) http.Handler, mounts []Mount) chi.Router {
 	r := chi.NewRouter()
 	r.Use(middleware...)
