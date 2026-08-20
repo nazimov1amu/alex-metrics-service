@@ -1,31 +1,32 @@
 package repository
 
 import (
+	"context"
+	"database/sql"
+
+	"github.com/Alexunder2003/alex-metrics-service/internal/config"
 	"github.com/Alexunder2003/alex-metrics-service/internal/model"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-type Storage interface {
-	Get(key string) (model.Metrics, error)
-	Update(key string, value model.Metrics) error
-	GetBulk() ([]model.Metrics, error)
+type MetricsRepository interface {
+	Update(ctx context.Context, metric model.Metrics) error
+	Get(ctx context.Context, id string) (model.Metrics, error)
+	GetBulk(ctx context.Context) ([]model.Metrics, error)
 }
 
-type MetricsRepository struct {
-	storage Storage
-}
+func NewMetricsRepository(cfg *config.ServerConfig) (MetricsRepository, error) {
+	if cfg.DatabaseDSN != "" {
+		db, err := sql.Open("pgx", cfg.DatabaseDSN)
+		if err != nil {
+			return nil, err
+		}
+		return NewPostgresMetricsRepository(db), nil
+	}
 
-func NewMetricsRepository(storage Storage) *MetricsRepository {
-	return &MetricsRepository{storage: storage}
-}
+	if cfg.FileStoragePath != "" {
+		return NewFileMetricsRepository(cfg.FileStoragePath, cfg.Restore, cfg.StoreInterval == 0)
+	}
 
-func (r *MetricsRepository) Get(key string) (model.Metrics, error) {
-	return r.storage.Get(key)
-}
-
-func (r *MetricsRepository) Update(metric model.Metrics) error {
-	return r.storage.Update(metric.ID, metric)
-}
-
-func (r *MetricsRepository) GetBulk() ([]model.Metrics, error) {
-	return r.storage.GetBulk()
+	return NewMemMetricsRepository(), nil
 }

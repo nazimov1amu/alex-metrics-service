@@ -30,7 +30,7 @@ func MetricsRouter(h *Handler) chi.Router {
 
 func HealthRouter(h *HealthHandler) chi.Router {
 	r := chi.NewRouter()
-	r.Get("/ping", h.DBHealthCheck)
+	r.Get("/", h.DBHealthCheck)
 	return r
 }
 

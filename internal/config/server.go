@@ -14,6 +14,7 @@ type ServerConfig struct {
 	StoreInterval   int
 	FileStoragePath string
 	Restore         bool
+	DatabaseDSN     string
 }
 
 func NewServerConfig() *ServerConfig {
@@ -23,6 +24,7 @@ func NewServerConfig() *ServerConfig {
 	flag.IntVar(&config.StoreInterval, "i", 300, "store interval")
 	flag.StringVar(&config.FileStoragePath, "f", "storage.json", "file storage path")
 	flag.BoolVar(&config.Restore, "r", false, "restore from file")
+	flag.StringVar(&config.DatabaseDSN, "d", "", "database DSN")
 	flag.Parse()
 
 	if err := godotenv.Load(".env"); err != nil {
@@ -51,6 +53,10 @@ func NewServerConfig() *ServerConfig {
 			log.Fatalf("failed to convert RESTORE to bool: %v", err)
 		}
 		config.Restore = restore
+	}
+
+	if databaseDSN, ok := os.LookupEnv("DATABASE_DSN"); ok {
+		config.DatabaseDSN = databaseDSN
 	}
 
 	return config

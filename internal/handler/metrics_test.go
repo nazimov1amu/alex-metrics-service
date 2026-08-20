@@ -15,14 +15,13 @@ import (
 	"github.com/Alexunder2003/alex-metrics-service/internal/model"
 	"github.com/Alexunder2003/alex-metrics-service/internal/repository"
 	"github.com/Alexunder2003/alex-metrics-service/internal/service"
-	"github.com/Alexunder2003/alex-metrics-service/internal/storage"
 )
 
 func ptr[T any](v T) *T { return &v }
 
 func newTestRouter() http.Handler {
-	repository := repository.NewMetricsRepository(storage.NewMemStorage[model.Metrics]())
-	svc := service.NewMetricsService(repository, &config.ServerConfig{})
+	repo := repository.NewMemMetricsRepository()
+	svc := service.NewMetricsService(repo, &config.ServerConfig{})
 	return MetricsRouter(NewMetricsHandler(svc, zap.NewNop().Sugar()))
 }
 

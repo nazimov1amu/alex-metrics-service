@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
 	"errors"
@@ -22,9 +23,9 @@ var templatesFS embed.FS
 var metricsTmpl = template.Must(template.ParseFS(templatesFS, "templates/*.html"))
 
 type MetricsService interface {
-	Update(metric *model.Metrics) error
-	Get(id string) (model.Metrics, error)
-	GetBulk() ([]model.Metrics, error)
+	Update(ctx context.Context, metric *model.Metrics) error
+	Get(ctx context.Context, id string) (model.Metrics, error)
+	GetBulk(ctx context.Context) ([]model.Metrics, error)
 }
 
 type Handler struct {
@@ -51,7 +52,7 @@ func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = h.svc.Update(&metric); err != nil {
+	if err = h.svc.Update(r.Context(), &metric); err != nil {
 		h.writeError(w, err)
 		return
 	}
@@ -75,7 +76,7 @@ func (h *Handler) ValueJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	metric, err = h.svc.Get(metric.ID)
+	metric, err = h.svc.Get(r.Context(), metric.ID)
 	if err != nil {
 		h.writeError(w, err)
 		return
@@ -96,7 +97,7 @@ func (h *Handler) UpdatePath(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = h.svc.Update(&metric); err != nil {
+	if err = h.svc.Update(r.Context(), &metric); err != nil {
 		h.writeError(w, err)
 		return
 	}
@@ -113,7 +114,7 @@ func (h *Handler) UpdatePath(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ValuePath(w http.ResponseWriter, r *http.Request) {
-	metric, err := h.svc.Get(chi.URLParam(r, "name"))
+	metric, err := h.svc.Get(r.Context(), chi.URLParam(r, "name"))
 	if err != nil {
 		h.writeError(w, err)
 		return
@@ -130,7 +131,7 @@ func (h *Handler) ValuePath(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetBulk(w http.ResponseWriter, r *http.Request) {
-	metrics, err := h.svc.GetBulk()
+	metrics, err := h.svc.GetBulk(r.Context())
 	if err != nil {
 		h.writeError(w, err)
 		return

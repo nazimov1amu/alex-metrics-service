@@ -8,63 +8,66 @@ import (
 	"time"
 
 	"github.com/Alexunder2003/alex-metrics-service/internal/config"
-	"github.com/Alexunder2003/alex-metrics-service/internal/config/db"
 	"github.com/Alexunder2003/alex-metrics-service/internal/handler"
 	"github.com/Alexunder2003/alex-metrics-service/internal/middleware"
-	"github.com/Alexunder2003/alex-metrics-service/internal/model"
 	"github.com/Alexunder2003/alex-metrics-service/internal/repository"
 	"github.com/Alexunder2003/alex-metrics-service/internal/service"
-	"github.com/Alexunder2003/alex-metrics-service/internal/storage"
 	"github.com/go-chi/chi/v5"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"go.uber.org/zap"
 )
 
 type App struct {
-	cfg    config.ServerConfig
+	cfg            config.ServerConfig
 	metricsService *service.MetricsService
-	router chi.Router
-	logger *zap.SugaredLogger
-	store *storage.FileStorage[model.Metrics]
-	db *sql.DB
+	router         chi.Router
+	logger         *zap.SugaredLogger
+	metricsRepo    repository.MetricsRepository
+	db             *sql.DB
 }
 
 func NewApp() *App {
 	cfg := config.NewServerConfig()
-	dbCfg := db.NewDatabaseConfig()
 
-	db := storage.NewDatabase(dbCfg.DatabaseDSN)
-
-	if err := db.Ping(); err != nil {
-		log.Fatalf("failed to ping database: %v", err)
+	db, err := sql.Open("pgx", cfg.DatabaseDSN)
+	if err != nil {
+		log.Fatalf("failed to open database: %v", err)
 	}
 
 	logger, err := zap.NewProduction()
-    if err != nil {
-        log.Fatalf("failed to create logger: %v", err)
-    }
-    sugar := logger.Sugar()
+	if err != nil {
+		log.Fatalf("failed to create logger: %v", err)
+	}
+	sugar := logger.Sugar()
 
 	mw := []func(http.Handler) http.Handler{
 		middleware.LoggingMiddleware(sugar),
 		middleware.CompressingMiddleware,
 	}
 
-	store, err := storage.NewFileStorage[model.Metrics](cfg.FileStoragePath, cfg.Restore, cfg.StoreInterval == 0)
+	metricsRepo, err := repository.NewMetricsRepository(cfg)
 	if err != nil {
-		log.Fatalf("failed to create file storage: %v", err)
+		log.Fatalf("failed to create metrics repository: %v", err)
 	}
-	metricsRepository := repository.NewMetricsRepository(store)
-	metricsService := service.NewMetricsService(metricsRepository, cfg)
+	
+	metricsService := service.NewMetricsService(metricsRepo, cfg)
 	metricsHandler := handler.NewMetricsHandler(metricsService, sugar)
 	metricsRouter := handler.MetricsRouter(metricsHandler)
 
 	healthHandler := handler.NewHealthHandler(db, sugar)
 	healthRouter := handler.HealthRouter(healthHandler)
 
-	return &App{cfg: *cfg, store: store, metricsService: metricsService, router: handler.NewGlobalRouter(mw, []handler.Mount{
-		{Pattern: "/", Router: metricsRouter},
-		{Pattern: "/", Router: healthRouter},
-	}), logger: sugar}
+	return &App{
+		cfg:            *cfg,
+		metricsRepo:    metricsRepo,
+		db:             db,
+		metricsService: metricsService,
+		router: handler.NewGlobalRouter(mw, []handler.Mount{
+			{Pattern: "/", Router: metricsRouter},
+			{Pattern: "/ping", Router: healthRouter},
+		}),
+		logger: sugar,
+	}
 }
 
 func (a *App) Run() error {
@@ -72,17 +75,16 @@ func (a *App) Run() error {
 	if _, port, err := net.SplitHostPort(addr); err == nil {
 		addr = net.JoinHostPort("", port)
 	}
-	
-	ticker := time.NewTicker(time.Duration(a.cfg.StoreInterval) * time.Second)
-	defer ticker.Stop()
-	
-	if a.cfg.StoreInterval > 0 {
+
+	if fileRepo, ok := a.metricsRepo.(*repository.FileMetricsRepository); ok && a.cfg.StoreInterval > 0 {
+		ticker := time.NewTicker(time.Duration(a.cfg.StoreInterval) * time.Second)
 		go func() {
+			defer ticker.Stop()
 			for range ticker.C {
-				if err := a.store.Store(); err != nil {
+				if err := fileRepo.Store(); err != nil {
 					a.logger.Errorw("failed to store metrics", "error", err)
 				}
-			}	
+			}
 		}()
 	}
 

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,7 +10,6 @@ import (
 	"github.com/Alexunder2003/alex-metrics-service/internal/config"
 	"github.com/Alexunder2003/alex-metrics-service/internal/model"
 	"github.com/Alexunder2003/alex-metrics-service/internal/repository"
-	"github.com/Alexunder2003/alex-metrics-service/internal/storage"
 )
 
 func ptr[T any](v T) *T {
@@ -42,10 +42,10 @@ func TestMetricsService_Update(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo := repository.NewMetricsRepository(storage.NewMemStorage[model.Metrics]())
+			repo := repository.NewMemMetricsRepository()
 			svc := NewMetricsService(repo, &config.ServerConfig{})
 
-			err := svc.Update(tt.metric)
+			err := svc.Update(context.Background(), tt.metric)
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
 				return
@@ -54,7 +54,7 @@ func TestMetricsService_Update(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, *tt.metric)
 
-			got, err := svc.Get(tt.metric.ID)
+			got, err := svc.Get(context.Background(), tt.metric.ID)
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, got)
 		})
@@ -62,18 +62,18 @@ func TestMetricsService_Update(t *testing.T) {
 }
 
 func TestMetricsService_Update_CounterAccumulates(t *testing.T) {
-	repo := repository.NewMetricsRepository(storage.NewMemStorage[model.Metrics]())
+	repo := repository.NewMemMetricsRepository()
 	svc := NewMetricsService(repo, &config.ServerConfig{})
 
 	first := &model.Metrics{ID: "poll", MType: model.Counter, Delta: ptr(int64(10))}
-	require.NoError(t, svc.Update(first))
+	require.NoError(t, svc.Update(context.Background(), first))
 	assert.Equal(t, int64(10), *first.Delta)
 
 	second := &model.Metrics{ID: "poll", MType: model.Counter, Delta: ptr(int64(5))}
-	require.NoError(t, svc.Update(second))
+	require.NoError(t, svc.Update(context.Background(), second))
 	assert.Equal(t, int64(15), *second.Delta)
 
-	got, err := svc.Get("poll")
+	got, err := svc.Get(context.Background(), "poll")
 	require.NoError(t, err)
 	assert.Equal(t, int64(15), *got.Delta)
 }
@@ -107,16 +107,15 @@ func TestMetricsService_Get(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			store, err := storage.NewFileStorage[model.Metrics](t.TempDir()+"/metrics.json", false, false)
+			repo, err := repository.NewFileMetricsRepository(t.TempDir()+"/metrics.json", false, false)
 			require.NoError(t, err)
-			repo := repository.NewMetricsRepository(store)
 			svc := NewMetricsService(repo, &config.ServerConfig{})
 
 			if tt.seed != nil {
-				require.NoError(t, svc.Update(tt.seed))
+				require.NoError(t, svc.Update(context.Background(), tt.seed))
 			}
 
-			got, err := svc.Get(tt.query.ID)
+			got, err := svc.Get(context.Background(), tt.query.ID)
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
 				return
