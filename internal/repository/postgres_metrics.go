@@ -60,3 +60,20 @@ func (r *PostgresMetricsRepository) GetBulk(ctx context.Context) ([]model.Metric
 
 	return metrics, nil
 }
+
+func (r *PostgresMetricsRepository) BulkUpdate(ctx context.Context, metrics []model.Metrics) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	for _, metric := range metrics {
+		_, err := tx.ExecContext(ctx, queryUpsertMetric, metric.ID, metric.MType, metric.Delta, metric.Value)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+
+	return tx.Commit()
+}

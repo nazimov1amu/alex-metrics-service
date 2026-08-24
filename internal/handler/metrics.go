@@ -26,6 +26,7 @@ type MetricsService interface {
 	Update(ctx context.Context, metric *model.Metrics) error
 	Get(ctx context.Context, id string) (model.Metrics, error)
 	GetBulk(ctx context.Context) ([]model.Metrics, error)
+	BulkUpdate(ctx context.Context, metrics []model.Metrics) error
 }
 
 type Handler struct {
@@ -163,6 +164,29 @@ func metricFromPath(mType, name, raw string) (model.Metrics, error) {
 		return model.Metrics{}, service.ErrInvalidMetricType
 	}
 	return metric, nil
+}
+
+func (h *Handler) BulkUpdateJSON(w http.ResponseWriter, r *http.Request) {
+	var metrics []model.Metrics
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+	
+	if err = json.Unmarshal(body, &metrics); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err = h.svc.BulkUpdate(r.Context(), metrics); err != nil {
+		h.writeError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	writeJSON(w, http.StatusOK, metrics)
 }
 
 func (h *Handler) writeError(w http.ResponseWriter, err error) {

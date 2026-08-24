@@ -13,6 +13,7 @@ type MetricsRepository interface {
 	Update(ctx context.Context, metric model.Metrics) error
 	Get(ctx context.Context, id string) (model.Metrics, error)
 	GetBulk(ctx context.Context) ([]model.Metrics, error)
+	BulkUpdate(ctx context.Context, metrics []model.Metrics) error
 }
 
 func NewMetricsRepository(cfg *config.ServerConfig) (MetricsRepository, error) {

@@ -111,3 +111,13 @@ func (r *FileMetricsRepository) load() error {
 	}
 	return nil
 }
+
+func (r *FileMetricsRepository) BulkUpdate(ctx context.Context, metrics []model.Metrics) error {
+	if err := r.mem.BulkUpdate(ctx, metrics); err != nil {
+		return err
+	}
+	if err := r.Store(); err != nil {
+		return err
+	}
+	return nil
+}

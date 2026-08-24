@@ -17,6 +17,10 @@ func NewHealthHandler(db *sql.DB, logger *zap.SugaredLogger) *HealthHandler {
 }
 
 func (h *HealthHandler) DBHealthCheck(w http.ResponseWriter, r *http.Request) {
+	if h.db == nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	if err := h.db.PingContext(r.Context()); err != nil {
 		h.logger.Error("failed to ping database", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)

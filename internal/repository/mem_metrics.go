@@ -28,10 +28,19 @@ func (r *MemMetricsRepository) Get(_ context.Context, id string) (model.Metrics,
 	return value, nil
 }
 
+func (r *MemMetricsRepository) upsertLocked(metric model.Metrics) {
+	if metric.MType == model.Counter && metric.Delta != nil {
+		if existing, ok := r.storage[metric.ID]; ok && existing.Delta != nil {
+			*metric.Delta += *existing.Delta
+		}
+	}
+	r.storage[metric.ID] = metric
+}
+
 func (r *MemMetricsRepository) Update(_ context.Context, metric model.Metrics) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	r.storage[metric.ID] = metric
+	r.upsertLocked(metric)
 	return nil
 }
 
@@ -44,4 +53,13 @@ func (r *MemMetricsRepository) GetBulk(_ context.Context) ([]model.Metrics, erro
 		values = append(values, value)
 	}
 	return values, nil
+}
+
+func (r *MemMetricsRepository) BulkUpdate(_ context.Context, metrics []model.Metrics) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	for _, metric := range metrics {
+		r.upsertLocked(metric)
+	}
+	return nil
 }

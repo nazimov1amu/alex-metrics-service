@@ -19,6 +19,7 @@ type MetricsRepository interface {
 	Update(ctx context.Context, metric model.Metrics) error
 	Get(ctx context.Context, id string) (model.Metrics, error)
 	GetBulk(ctx context.Context) ([]model.Metrics, error)
+	BulkUpdate(ctx context.Context, metrics []model.Metrics) error
 }
 
 type MetricsService struct {
@@ -30,15 +31,11 @@ func NewMetricsService(repository MetricsRepository, config *config.ServerConfig
 	return &MetricsService{repository: repository, config: config}
 }
 
-func (s *MetricsService) Update(ctx context.Context, metric *model.Metrics) error {
+func (s *MetricsService) validate(metric *model.Metrics) error {
 	switch metric.MType {
 	case model.Counter:
 		if metric.Delta == nil {
 			return ErrInvalidCounterValue
-		}
-		existing, err := s.repository.Get(ctx, metric.ID)
-		if err == nil && existing.Delta != nil {
-			*metric.Delta += *existing.Delta
 		}
 	case model.Gauge:
 		if metric.Value == nil {
@@ -47,7 +44,13 @@ func (s *MetricsService) Update(ctx context.Context, metric *model.Metrics) erro
 	default:
 		return ErrInvalidMetricType
 	}
+	return nil
+}
 
+func (s *MetricsService) Update(ctx context.Context, metric *model.Metrics) error {
+	if err := s.validate(metric); err != nil {
+		return err
+	}
 	return s.repository.Update(ctx, *metric)
 }
 
@@ -61,4 +64,13 @@ func (s *MetricsService) Get(ctx context.Context, id string) (model.Metrics, err
 
 func (s *MetricsService) GetBulk(ctx context.Context) ([]model.Metrics, error) {
 	return s.repository.GetBulk(ctx)
+}
+
+func (s *MetricsService) BulkUpdate(ctx context.Context, metrics []model.Metrics) error {
+	for i := range metrics {
+		if err := s.validate(&metrics[i]); err != nil {
+			return err
+		}
+	}
+	return s.repository.BulkUpdate(ctx, metrics)
 }

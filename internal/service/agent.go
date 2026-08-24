@@ -94,31 +94,65 @@ func (s *AgentService) postMetric(metric model.Metrics) error {
 	return nil
 }
 
-func (s *AgentService) sendMetrics(metrics map[string]float64, pollCount int64) error {
-	for name, value := range metrics {
-		v := value
-		if err := s.postMetric(model.Metrics{
-			ID:    name,
-			MType: model.Gauge,
-			Value: &v,
-		}); err != nil {
-			log.Printf("failed to send metrics %s: %v\n", name, err)
-			return err
-		}
+func (s *AgentService) postBulkMetrics(metrics []model.Metrics) error {
+	body, err := json.Marshal(metrics)
+	if err != nil {
+		return err
 	}
 
-	delta := pollCount
-	if err := s.postMetric(model.Metrics{
-		ID:    "PollCount",
-		MType: model.Counter,
-		Delta: &delta,
-	}); err != nil {
-		log.Printf("failed to update poll count: %v\n", err)
+	compressed, err := encoding.Compress(body)
+	if err != nil {
 		return err
+	}
+
+	endpoint := fmt.Sprintf("http://%s/updates/", s.config.Address)
+	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(compressed))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Encoding", "gzip")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to send bulk metrics: %s", resp.Status)
 	}
 	return nil
 }
 
+func (s *AgentService) sendMetrics(metrics map[string]float64, pollCount int64) error {
+	if len(metrics) == 0 {
+		return nil
+	}
+
+	metricsReq := make([]model.Metrics, 0, len(metrics))
+	
+	for name, value := range metrics {
+		metricsReq = append(metricsReq, model.Metrics{
+			ID:    name,
+			MType: model.Gauge,
+			Value: &value,
+		})
+	}
+	metricsReq = append(metricsReq, model.Metrics{
+		ID:    "PollCount",
+		MType: model.Counter,
+		Delta: &pollCount,
+	})
+
+	if err := s.postBulkMetrics(metricsReq); err != nil {
+		log.Printf("failed to send bulk metrics: %v\n", err)
+		return err
+	}
+
+	return nil
+}
+	
 func (s *AgentService) pollLoop() {
 	ticker := time.NewTicker(time.Duration(s.config.PollInterval) * time.Second)
 	for range ticker.C {
