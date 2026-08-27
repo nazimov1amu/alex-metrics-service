@@ -1,0 +1,1 @@
+SELECT * FROM metrics WHERE id = $1;
