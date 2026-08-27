@@ -12,6 +12,7 @@ import (
 	"github.com/Alexunder2003/alex-metrics-service/internal/middleware"
 	"github.com/Alexunder2003/alex-metrics-service/internal/repository"
 	"github.com/Alexunder2003/alex-metrics-service/internal/service"
+	"github.com/Alexunder2003/alex-metrics-service/internal/utils"
 	"github.com/go-chi/chi/v5"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"go.uber.org/zap"
@@ -29,11 +30,18 @@ type App struct {
 func NewApp() *App {
 	cfg := config.NewServerConfig()
 
-	db, err := sql.Open("pgx", cfg.DatabaseDSN)
-	if err != nil {
-		log.Fatalf("failed to open database: %v", err)
+	var db *sql.DB
+	if cfg.DatabaseDSN != "" {
+		var err error
+		db, err = sql.Open("pgx", cfg.DatabaseDSN)
+		if err != nil {
+			log.Fatalf("failed to open database: %v", err)
+		}
+		if err := utils.Up(db); err != nil {
+			log.Fatalf("failed to run migrations: %v", err)
+		}
 	}
-
+	
 	logger, err := zap.NewProduction()
 	if err != nil {
 		log.Fatalf("failed to create logger: %v", err)
