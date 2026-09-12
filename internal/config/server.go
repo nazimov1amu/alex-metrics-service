@@ -15,6 +15,7 @@ type ServerConfig struct {
 	FileStoragePath string
 	Restore         bool
 	DatabaseDSN     string
+	SecretKey       string
 }
 
 func NewServerConfig() *ServerConfig {
@@ -25,6 +26,7 @@ func NewServerConfig() *ServerConfig {
 	flag.StringVar(&config.FileStoragePath, "f", "storage.json", "file storage path")
 	flag.BoolVar(&config.Restore, "r", false, "restore from file")
 	flag.StringVar(&config.DatabaseDSN, "d", "", "database DSN")
+	flag.StringVar(&config.SecretKey, "k", "", "secret key")
 	flag.Parse()
 
 	if err := godotenv.Load(".env"); err != nil {
@@ -57,6 +59,10 @@ func NewServerConfig() *ServerConfig {
 
 	if databaseDSN, ok := os.LookupEnv("DATABASE_DSN"); ok {
 		config.DatabaseDSN = databaseDSN
+	}
+
+	if secretKey, ok := os.LookupEnv("KEY"); ok {
+		config.SecretKey = secretKey
 	}
 
 	return config

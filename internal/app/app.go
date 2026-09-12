@@ -41,7 +41,7 @@ func NewApp() *App {
 			log.Fatalf("failed to run migrations: %v", err)
 		}
 	}
-	
+
 	logger, err := zap.NewProduction()
 	if err != nil {
 		log.Fatalf("failed to create logger: %v", err)
@@ -51,13 +51,14 @@ func NewApp() *App {
 	mw := []func(http.Handler) http.Handler{
 		middleware.LoggingMiddleware(sugar),
 		middleware.CompressingMiddleware,
+		middleware.AuthMiddleware(cfg.SecretKey),
 	}
 
 	metricsRepo, err := repository.NewMetricsRepository(cfg)
 	if err != nil {
 		log.Fatalf("failed to create metrics repository: %v", err)
 	}
-	
+
 	metricsService := service.NewMetricsService(metricsRepo, cfg)
 	metricsHandler := handler.NewMetricsHandler(metricsService, sugar)
 	metricsRouter := handler.MetricsRouter(metricsHandler)

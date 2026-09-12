@@ -13,6 +13,7 @@ type AgentConfig struct {
 	Address        string
 	PollInterval   int
 	ReportInterval int
+	SecretKey      string
 }
 
 func NewAgentConfig() *AgentConfig {
@@ -21,6 +22,7 @@ func NewAgentConfig() *AgentConfig {
 	flag.StringVar(&config.Address, "a", "localhost:8080", "HTTP server address host:port")
 	flag.IntVar(&config.PollInterval, "p", 2, "poll interval")
 	flag.IntVar(&config.ReportInterval, "r", 10, "report interval")
+	flag.StringVar(&config.SecretKey, "k", "", "secret key")
 	flag.Parse()
 
 	if err := godotenv.Load(".env"); err != nil {
@@ -45,6 +47,10 @@ func NewAgentConfig() *AgentConfig {
 			log.Fatalf("failed to convert REPORT_INTERVAL to int: %v", err)
 		}
 		config.ReportInterval = reportInterval
+	}
+
+	if secretKey, ok := os.LookupEnv("KEY"); ok {
+		config.SecretKey = secretKey
 	}
 
 	return config

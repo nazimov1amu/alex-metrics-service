@@ -2,6 +2,9 @@ package service
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -63,41 +66,17 @@ func (s *AgentService) collectRuntimeMetrics() map[string]float64 {
 	}
 }
 
-func (s *AgentService) postMetric(metric model.Metrics) error {
-	body, err := json.Marshal(metric)
-	if err != nil {
-		return err
-	}
-
-	compressed, err := encoding.Compress(body)
-	if err != nil {
-		return err
-	}
-	
-	endpoint := fmt.Sprintf("http://%s/update/", s.config.Address)
-	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(compressed))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Content-Encoding", "gzip")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to send metric %s: %s", metric.ID, resp.Status)
-	}
-	return nil
-}
-
 func (s *AgentService) postBulkMetrics(metrics []model.Metrics) error {
 	body, err := json.Marshal(metrics)
 	if err != nil {
 		return err
+	}
+
+	var sign string
+	if s.config.SecretKey != "" {
+		hmac := hmac.New(sha256.New, []byte(s.config.SecretKey))
+		hmac.Write(body)
+		sign = hex.EncodeToString(hmac.Sum(nil))
 	}
 
 	compressed, err := encoding.Compress(body)
@@ -109,6 +88,9 @@ func (s *AgentService) postBulkMetrics(metrics []model.Metrics) error {
 	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(compressed))
 	if err != nil {
 		return err
+	}
+	if sign != "" {
+		req.Header.Set("HashSHA256", sign)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Content-Encoding", "gzip")
@@ -131,7 +113,7 @@ func (s *AgentService) sendMetrics(metrics map[string]float64, pollCount int64) 
 	}
 
 	metricsReq := make([]model.Metrics, 0, len(metrics))
-	
+
 	for name, value := range metrics {
 		metricsReq = append(metricsReq, model.Metrics{
 			ID:    name,
@@ -152,7 +134,7 @@ func (s *AgentService) sendMetrics(metrics map[string]float64, pollCount int64) 
 
 	return nil
 }
-	
+
 func (s *AgentService) pollLoop() {
 	ticker := time.NewTicker(time.Duration(s.config.PollInterval) * time.Second)
 	for range ticker.C {
