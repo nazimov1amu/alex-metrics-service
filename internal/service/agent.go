@@ -18,6 +18,8 @@ import (
 	"github.com/Alexunder2003/alex-metrics-service/internal/config"
 	"github.com/Alexunder2003/alex-metrics-service/internal/encoding"
 	"github.com/Alexunder2003/alex-metrics-service/internal/model"
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/mem"
 )
 
 type AgentService struct {
@@ -60,14 +62,46 @@ func (s *AgentService) collectRuntimeMetrics() map[string]float64 {
 		"PauseTotalNs":  float64(m.PauseTotalNs),
 		"StackInuse":    float64(m.StackInuse),
 		"StackSys":      float64(m.StackSys),
-		"Sys":           float64(m.Sys),
-		"TotalAlloc":    float64(m.TotalAlloc),
 		"RandomValue":   rand.Float64(),
 	}
 }
 
-func (s *AgentService) postBulkMetrics(metrics []model.Metrics) error {
-	body, err := json.Marshal(metrics)
+func (s *AgentService) collectAdditionalMetrics() (map[string]float64, error) {
+	vm, err := mem.VirtualMemory()
+	if err != nil {
+		return nil, err
+	}
+	percents, err := cpu.Percent(time.Second, true)
+	if err != nil {
+		return nil, err
+	}
+
+	out := map[string]float64{
+		"TotalMemory": float64(vm.Total),
+		"FreeMemory":  float64(vm.Free),
+	}
+	for i, p := range percents {
+		out[fmt.Sprintf("CPUutilization%d", i+1)] = p
+	}
+	return out, nil
+}
+
+func (s *AgentService) additionalPollLoop() {
+	ticker := time.NewTicker(time.Duration(s.config.PollInterval) * time.Second)
+	for range ticker.C {
+		extra, err := s.collectAdditionalMetrics()
+		if err != nil {
+			log.Printf("failed to collect additional metrics: %v", err)
+			continue
+		}
+		s.mu.Lock()
+		maps.Copy(s.metrics, extra)
+		s.mu.Unlock()
+	}
+}
+
+func (s *AgentService) postMetrics(metric model.Metrics) error {
+	body, err := json.Marshal(metric)
 	if err != nil {
 		return err
 	}
@@ -84,7 +118,7 @@ func (s *AgentService) postBulkMetrics(metrics []model.Metrics) error {
 		return err
 	}
 
-	endpoint := fmt.Sprintf("http://%s/updates/", s.config.Address)
+	endpoint := fmt.Sprintf("http://%s/update/", s.config.Address)
 	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(compressed))
 	if err != nil {
 		return err
@@ -107,62 +141,60 @@ func (s *AgentService) postBulkMetrics(metrics []model.Metrics) error {
 	return nil
 }
 
-func (s *AgentService) sendMetrics(metrics map[string]float64, pollCount int64) error {
-	if len(metrics) == 0 {
-		return nil
-	}
-
-	metricsReq := make([]model.Metrics, 0, len(metrics))
-
-	for name, value := range metrics {
-		metricsReq = append(metricsReq, model.Metrics{
-			ID:    name,
-			MType: model.Gauge,
-			Value: &value,
-		})
-	}
-	metricsReq = append(metricsReq, model.Metrics{
-		ID:    "PollCount",
-		MType: model.Counter,
-		Delta: &pollCount,
-	})
-
-	if err := s.postBulkMetrics(metricsReq); err != nil {
-		log.Printf("failed to send bulk metrics: %v\n", err)
-		return err
-	}
-
-	return nil
-}
-
 func (s *AgentService) pollLoop() {
 	ticker := time.NewTicker(time.Duration(s.config.PollInterval) * time.Second)
 	for range ticker.C {
-		metrics := s.collectRuntimeMetrics()
+		snapshot := s.collectRuntimeMetrics()
 		s.mu.Lock()
-		s.metrics = metrics
+		maps.Copy(s.metrics, snapshot)
 		s.pollCount++
 		s.mu.Unlock()
 	}
 }
 
-func (s *AgentService) reportLoop() {
+func (s *AgentService) reportLoop(input chan model.Metrics) {
 	ticker := time.NewTicker(time.Duration(s.config.ReportInterval) * time.Second)
 	for range ticker.C {
 		s.mu.Lock()
 		snapshot := maps.Clone(s.metrics)
 		pollCount := s.pollCount
-		s.pollCount = 0
 		s.mu.Unlock()
-		if err := s.sendMetrics(snapshot, pollCount); err != nil {
-			log.Printf("failed to send metrics: %v\n", err)
+		for name, value := range snapshot {
+			input <- model.Metrics{
+				ID:    name,
+				MType: model.Gauge,
+				Value: &value,
+			}
+		}
+		input <- model.Metrics{
+			ID:    "PollCount",
+			MType: model.Counter,
+			Delta: &pollCount,
+		}
+	}
+}
+
+func (s *AgentService) worker(input chan model.Metrics) {
+	for metric := range input {
+		if err := s.postMetrics(metric); err != nil {
+			log.Printf("failed to send metric: %v\n", err)
 		}
 	}
 }
 
 func (s *AgentService) Run() {
 	s.metrics = make(map[string]float64)
+	jobs := make(chan model.Metrics, 40)
+	workers := s.config.RateLimit
+	if workers < 1 {
+		workers = 1
+	}
+
 	go s.pollLoop()
-	go s.reportLoop()
+	go s.additionalPollLoop()
+	go s.reportLoop(jobs)
+	for i := 0; i < s.config.RateLimit; i++ {
+		go s.worker(jobs)
+	}
 	select {}
 }

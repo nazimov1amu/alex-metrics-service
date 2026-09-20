@@ -14,6 +14,7 @@ type AgentConfig struct {
 	PollInterval   int
 	ReportInterval int
 	SecretKey      string
+	RateLimit      int
 }
 
 func NewAgentConfig() *AgentConfig {
@@ -23,6 +24,7 @@ func NewAgentConfig() *AgentConfig {
 	flag.IntVar(&config.PollInterval, "p", 2, "poll interval")
 	flag.IntVar(&config.ReportInterval, "r", 10, "report interval")
 	flag.StringVar(&config.SecretKey, "k", "", "secret key")
+	flag.IntVar(&config.RateLimit, "l", 1, "rate limit")
 	flag.Parse()
 
 	if err := godotenv.Load(".env"); err != nil {
@@ -51,6 +53,14 @@ func NewAgentConfig() *AgentConfig {
 
 	if secretKey, ok := os.LookupEnv("KEY"); ok {
 		config.SecretKey = secretKey
+	}
+
+	if rateLimitEnv, ok := os.LookupEnv("RATE_LIMIT"); ok {
+		rateLimit, err := strconv.Atoi(rateLimitEnv)
+		if err != nil {
+			log.Fatalf("failed to convert RATE_LIMIT to int: %v", err)
+		}
+		config.RateLimit = rateLimit
 	}
 
 	return config
