@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Metrics</title>
+</head>
+<body>
+  <h1>Metrics</h1>
+  <ul>
+    {{range .}}
+      <li>
+        {{.ID}}:
+        {{if eq .MType "counter"}}{{.Delta}}{{end}}
+        {{if eq .MType "gauge"}}{{.Value}}{{end}}
+      </li>
+    {{else}}
+      <li>No metrics yet.</li>
+    {{end}}
+  </ul>
+</body>
+</html>
