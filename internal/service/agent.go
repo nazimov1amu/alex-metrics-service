@@ -11,6 +11,7 @@ import (
 	"maps"
 	"math/rand/v2"
 	"net/http"
+	"os"
 	"runtime"
 	"sync"
 	"time"
@@ -182,10 +183,12 @@ func (s *AgentService) worker(input chan model.Metrics) {
 	}
 }
 
-func (s *AgentService) Run() {
+func (s *AgentService) Run(quit chan os.Signal) {
 	s.metrics = make(map[string]float64)
 	jobs := make(chan model.Metrics, 40)
+
 	workers := s.config.RateLimit
+
 	if workers < 1 {
 		workers = 1
 	}
@@ -193,8 +196,10 @@ func (s *AgentService) Run() {
 	go s.pollLoop()
 	go s.additionalPollLoop()
 	go s.reportLoop(jobs)
-	for i := 0; i < s.config.RateLimit; i++ {
+
+	for i := 0; i < workers; i++ {
 		go s.worker(jobs)
 	}
-	select {}
+
+	<-quit
 }

@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"os"
+
 	"github.com/Alexunder2003/alex-metrics-service/internal/config"
 	"github.com/Alexunder2003/alex-metrics-service/internal/service"
 )
@@ -13,6 +15,6 @@ func NewAgent(cfg *config.AgentConfig) *Agent {
 	return &Agent{agentService: service.NewAgentService(cfg)}
 }
 
-func (a *Agent) Run() {
-	a.agentService.Run()
+func (a *Agent) Run(quit chan os.Signal) {
+	a.agentService.Run(quit)
 }
