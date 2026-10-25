@@ -10,6 +10,7 @@ import (
 	"github.com/Alexunder2003/alex-metrics-service/internal/config"
 	"github.com/Alexunder2003/alex-metrics-service/internal/handler"
 	"github.com/Alexunder2003/alex-metrics-service/internal/middleware"
+	"github.com/Alexunder2003/alex-metrics-service/internal/model"
 	"github.com/Alexunder2003/alex-metrics-service/internal/repository"
 	"github.com/Alexunder2003/alex-metrics-service/internal/service"
 	"github.com/Alexunder2003/alex-metrics-service/internal/utils"
@@ -59,9 +60,27 @@ func NewApp() *App {
 		log.Fatalf("failed to create metrics repository: %v", err)
 	}
 
+	channels := make([]chan *model.Audit, 0, 2)
+
+	if cfg.AuditFileStoragePath != "" {
+		events := make(chan *model.Audit, 16)
+		go service.NewAuditService(repository.NewFileAuditRepository(cfg.AuditFileStoragePath), events, sugar).Observe()
+		channels = append(channels, events)
+	}
+
+	if cfg.AuditURL != "" {
+		events := make(chan *model.Audit, 16)
+		go service.NewAuditService(repository.NewHTTPAuditRepository(cfg.AuditURL), events, sugar).Observe()
+		channels = append(channels, events)
+	}
+
 	metricsService := service.NewMetricsService(metricsRepo, cfg)
 	metricsHandler := handler.NewMetricsHandler(metricsService, sugar)
 	metricsRouter := handler.MetricsRouter(metricsHandler)
+
+	if len(channels) > 0 {
+		metricsRouter = handler.MetricsRouter(metricsHandler, middleware.AuditMiddleware(channels))
+	}
 
 	healthHandler := handler.NewHealthHandler(db, sugar)
 	healthRouter := handler.HealthRouter(healthHandler)

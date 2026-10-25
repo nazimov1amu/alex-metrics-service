@@ -11,18 +11,22 @@ type Mount struct {
 	Router  chi.Router
 }
 
-func MetricsRouter(h *Handler) chi.Router {
+func MetricsRouter(h *Handler, audit ...func(http.Handler) http.Handler) chi.Router {
 	r := chi.NewRouter()
 
-	r.Post("/update/", h.UpdateJSON)
+	var updates chi.Router = r
+	if len(audit) > 0 && audit[0] != nil {
+		updates = r.With(audit[0])
+	}
+
+	updates.Post("/update/", h.UpdateJSON)
 	r.Post("/value/", h.ValueJSON)
-	r.Post("/updates/", h.BulkUpdateJSON)
+	updates.Post("/updates/", h.BulkUpdateJSON)
 
 	// Plain URL API (iter1–5 compatibility)
-	r.Post("/update/{type}/{name}/{value}", h.UpdatePath)
+	updates.Post("/update/{type}/{name}/{value}", h.UpdatePath)
 	r.Get("/value/{type}/{name}", h.ValuePath)
 	r.Get("/", h.GetBulk)
-
 
 	return r
 }

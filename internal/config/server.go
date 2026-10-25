@@ -10,12 +10,14 @@ import (
 )
 
 type ServerConfig struct {
-	Address         string
-	StoreInterval   int
-	FileStoragePath string
-	Restore         bool
-	DatabaseDSN     string
-	SecretKey       string
+	Address              string
+	StoreInterval        int
+	FileStoragePath      string
+	Restore              bool
+	DatabaseDSN          string
+	SecretKey            string
+	AuditURL             string
+	AuditFileStoragePath string
 }
 
 func NewServerConfig() *ServerConfig {
@@ -27,6 +29,8 @@ func NewServerConfig() *ServerConfig {
 	flag.BoolVar(&config.Restore, "r", false, "restore from file")
 	flag.StringVar(&config.DatabaseDSN, "d", "", "database DSN")
 	flag.StringVar(&config.SecretKey, "k", "", "secret key")
+	flag.StringVar(&config.AuditURL, "audit-url", "", "audit URL")
+	flag.StringVar(&config.AuditFileStoragePath, "audit-file", "", "audit file storage path")
 	flag.Parse()
 
 	if err := godotenv.Load(".env"); err != nil {
@@ -63,6 +67,14 @@ func NewServerConfig() *ServerConfig {
 
 	if secretKey, ok := os.LookupEnv("KEY"); ok {
 		config.SecretKey = secretKey
+	}
+
+	if auditURL, ok := os.LookupEnv("AUDIT_URL"); ok {
+		config.AuditURL = auditURL
+	}
+
+	if auditFileStoragePath, ok := os.LookupEnv("AUDIT_FILE"); ok {
+		config.AuditFileStoragePath = auditFileStoragePath
 	}
 
 	return config
