@@ -26,12 +26,14 @@ type App struct {
 	logger         *zap.SugaredLogger
 	metricsRepo    repository.MetricsRepository
 	db             *sql.DB
+	auditChannels  []chan *model.Audit
 }
 
 func NewApp() *App {
 	cfg := config.NewServerConfig()
 
 	var db *sql.DB
+
 	if cfg.DatabaseDSN != "" {
 		var err error
 		db, err = sql.Open("pgx", cfg.DatabaseDSN)
@@ -89,6 +91,7 @@ func NewApp() *App {
 		cfg:            *cfg,
 		metricsRepo:    metricsRepo,
 		db:             db,
+		auditChannels:  channels,
 		metricsService: metricsService,
 		router: handler.NewGlobalRouter(mw, []handler.Mount{
 			{Pattern: "/", Router: metricsRouter},
@@ -96,6 +99,18 @@ func NewApp() *App {
 		}),
 		logger: sugar,
 	}
+}
+
+func (a *App) Close() error {
+	for _, events := range a.auditChannels {
+		close(events)
+	}
+	if a.db != nil {
+		if err := a.db.Close(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (a *App) Run() error {
