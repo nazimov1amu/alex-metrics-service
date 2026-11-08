@@ -5,9 +5,7 @@ import (
 	"embed"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"html/template"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -41,19 +39,13 @@ func NewMetricsHandler(svc MetricsService, logger *zap.SugaredLogger) *Handler {
 func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 	var metric model.Metrics
 
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
 	defer r.Body.Close()
-
-	if err = json.Unmarshal(body, &metric); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&metric); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	if err = h.svc.Update(r.Context(), &metric); err != nil {
+	if err := h.svc.Update(r.Context(), &metric); err != nil {
 		h.writeError(w, err)
 		return
 	}
@@ -65,19 +57,13 @@ func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ValueJSON(w http.ResponseWriter, r *http.Request) {
 	var metric model.Metrics
 
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
 	defer r.Body.Close()
-
-	if err = json.Unmarshal(body, &metric); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&metric); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	metric, err = h.svc.Get(r.Context(), metric.ID)
+	metric, err := h.svc.Get(r.Context(), metric.ID)
 	if err != nil {
 		h.writeError(w, err)
 		return
@@ -108,9 +94,9 @@ func (h *Handler) UpdatePath(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	switch metric.MType {
 	case model.Counter:
-		_, _ = w.Write(fmt.Appendf(nil, "%d", *metric.Delta))
+		_, _ = w.Write([]byte(strconv.FormatInt(*metric.Delta, 10)))
 	case model.Gauge:
-		_, _ = w.Write(fmt.Appendf(nil, "%f", *metric.Value))
+		_, _ = w.Write([]byte(strconv.FormatFloat(*metric.Value, 'f', 6, 64)))
 	}
 }
 
@@ -168,19 +154,13 @@ func metricFromPath(mType, name, raw string) (model.Metrics, error) {
 
 func (h *Handler) BulkUpdateJSON(w http.ResponseWriter, r *http.Request) {
 	var metrics []model.Metrics
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
 	defer r.Body.Close()
-	
-	if err = json.Unmarshal(body, &metrics); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&metrics); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	if err = h.svc.BulkUpdate(r.Context(), metrics); err != nil {
+	if err := h.svc.BulkUpdate(r.Context(), metrics); err != nil {
 		h.writeError(w, err)
 		return
 	}

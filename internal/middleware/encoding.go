@@ -2,11 +2,19 @@ package middleware
 
 import (
 	"compress/gzip"
+	"io"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/Alexunder2003/alex-metrics-service/internal/encoding"
 )
+
+var gzipPool = sync.Pool{
+	New: func() any {
+		return gzip.NewWriter(io.Discard)
+	},
+}
 
 type compressorResponseWriter struct {
 	http.ResponseWriter
@@ -32,7 +40,9 @@ func (w *compressorResponseWriter) writeHeader(data []byte) {
 	if isCompressible(w.Header().Get("Content-Type")) {
 		w.Header().Set("Content-Encoding", "gzip")
 		w.Header().Del("Content-Length")
-		w.gzipWriter = gzip.NewWriter(w.ResponseWriter)
+		gz := gzipPool.Get().(*gzip.Writer)
+		gz.Reset(w.ResponseWriter)
+		w.gzipWriter = gz
 	}
 
 	if w.status == 0 {
@@ -52,10 +62,14 @@ func (w *compressorResponseWriter) Write(data []byte) (int, error) {
 
 func (w *compressorResponseWriter) Close() error {
 	w.writeHeader(nil)
-	if w.gzipWriter != nil {
-		return w.gzipWriter.Close()
+	if w.gzipWriter == nil {
+		return nil
 	}
-	return nil
+	err := w.gzipWriter.Close()
+	w.gzipWriter.Reset(io.Discard)
+	gzipPool.Put(w.gzipWriter)
+	w.gzipWriter = nil
+	return err
 }
 
 func isCompressible(contentType string) bool {

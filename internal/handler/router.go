@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	chimw "github.com/go-chi/chi/v5/middleware"
 )
 
 type Mount struct {
@@ -40,6 +41,7 @@ func HealthRouter(h *HealthHandler) chi.Router {
 func NewGlobalRouter(middleware []func(http.Handler) http.Handler, mounts []Mount) chi.Router {
 	r := chi.NewRouter()
 	r.Use(middleware...)
+	r.Mount("/debug", chimw.Profiler())
 	for _, m := range mounts {
 		r.Mount(m.Pattern, m.Router)
 	}

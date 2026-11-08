@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	_ "net/http/pprof"
 
 	"github.com/Alexunder2003/alex-metrics-service/internal/app"
 )
