@@ -5,7 +5,6 @@ import (
 	"time"
 )
 
-
 func LinearRetry(attempts int, interval time.Duration, fn func() error) error {
 	sleepDuration := 1 * time.Second
 
@@ -19,6 +18,3 @@ func LinearRetry(attempts int, interval time.Duration, fn func() error) error {
 	}
 	return fmt.Errorf("failed after %d attempts", attempts)
 }
-
-
-

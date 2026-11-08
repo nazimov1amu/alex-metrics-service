@@ -9,7 +9,7 @@ import (
 
 type HealthHandler struct {
 	logger *zap.SugaredLogger
-	db *sql.DB
+	db     *sql.DB
 }
 
 func NewHealthHandler(db *sql.DB, logger *zap.SugaredLogger) *HealthHandler {

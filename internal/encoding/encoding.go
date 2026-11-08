@@ -8,7 +8,7 @@ import (
 )
 
 type CompressorResponseWriter struct {
-	rw   http.ResponseWriter
+	rw  http.ResponseWriter
 	grw *gzip.Writer
 }
 
@@ -31,4 +31,3 @@ func Decompress(data io.ReadCloser) (io.ReadCloser, error) {
 	}
 	return gz, nil
 }
-
