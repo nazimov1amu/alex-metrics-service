@@ -17,15 +17,18 @@ type auditResponseWriter struct {
 	status int
 }
 
+// WriteHeader запоминает статус ответа и передаёт его клиенту.
 func (w *auditResponseWriter) WriteHeader(status int) {
 	w.status = status
 	w.ResponseWriter.WriteHeader(status)
 }
 
+// Write передаёт тело ответа исходному ResponseWriter.
 func (w *auditResponseWriter) Write(data []byte) (int, error) {
 	return w.ResponseWriter.Write(data)
 }
 
+// AuditMiddleware после успешного изменения метрик отправляет событие аудита в каждый канал.
 func AuditMiddleware(channels []chan *model.Audit) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -23,6 +23,7 @@ import (
 	"github.com/shirou/gopsutil/v4/mem"
 )
 
+// AgentService периодически снимает runtime-метрики и отправляет их на сервер.
 type AgentService struct {
 	config    *config.AgentConfig
 	metrics   map[string]float64
@@ -30,6 +31,7 @@ type AgentService struct {
 	pollCount int64
 }
 
+// NewAgentService создаёт агент с заданной конфигурацией опроса и отправки.
 func NewAgentService(config *config.AgentConfig) *AgentService {
 	return &AgentService{config: config}
 }
@@ -183,6 +185,8 @@ func (s *AgentService) worker(input chan model.Metrics) {
 	}
 }
 
+// Run запускает опрос runtime- и системных метрик и отправку их на сервер.
+// Метод блокируется, пока в quit не придёт сигнал завершения.
 func (s *AgentService) Run(quit chan os.Signal) {
 	s.metrics = make(map[string]float64)
 	jobs := make(chan model.Metrics, 40)

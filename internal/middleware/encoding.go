@@ -23,6 +23,7 @@ type compressorResponseWriter struct {
 	gzipWriter  *gzip.Writer
 }
 
+// WriteHeader запоминает статус и откладывает отправку заголовков до первой записи тела.
 func (w *compressorResponseWriter) WriteHeader(status int) {
 	w.status = status
 }
@@ -51,6 +52,7 @@ func (w *compressorResponseWriter) writeHeader(data []byte) {
 	w.ResponseWriter.WriteHeader(w.status)
 }
 
+// Write отправляет тело ответа как есть или через gzip, если тип содержимого сжимается.
 func (w *compressorResponseWriter) Write(data []byte) (int, error) {
 	w.writeHeader(data)
 
@@ -60,6 +62,7 @@ func (w *compressorResponseWriter) Write(data []byte) (int, error) {
 	return w.ResponseWriter.Write(data)
 }
 
+// Close завершает gzip-поток и возвращает писатель в пул.
 func (w *compressorResponseWriter) Close() error {
 	w.writeHeader(nil)
 	if w.gzipWriter == nil {
@@ -78,6 +81,7 @@ func isCompressible(contentType string) bool {
 		strings.Contains(contentType, "text/html")
 }
 
+// WithCompressing распаковывает gzip-тело запроса и сжимает ответ, если клиент прислал Accept-Encoding: gzip.
 func WithCompressing(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.Header.Get("Content-Encoding"), "gzip") {
@@ -100,6 +104,7 @@ func WithCompressing(next http.Handler) http.Handler {
 	})
 }
 
+// CompressingMiddleware оборачивает обработчик сжатием gzip.
 func CompressingMiddleware(next http.Handler) http.Handler {
 	return WithCompressing(next)
 }

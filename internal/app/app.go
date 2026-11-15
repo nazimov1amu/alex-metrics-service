@@ -1,3 +1,4 @@
+// Package app собирает зависимости и запускает HTTP-сервер метрик.
 package app
 
 import (
@@ -19,6 +20,7 @@ import (
 	"go.uber.org/zap"
 )
 
+// App — собранный сервер метрик: конфигурация, хранилище, роутер и аудит.
 type App struct {
 	cfg            config.ServerConfig
 	metricsService *service.MetricsService
@@ -29,6 +31,8 @@ type App struct {
 	auditChannels  []chan *model.Audit
 }
 
+// NewApp читает конфигурацию, поднимает хранилище и собирает HTTP-роутер.
+// Ошибка конфигурации или подключения к базе завершает процесс.
 func NewApp() *App {
 	cfg := config.NewServerConfig()
 
@@ -101,6 +105,7 @@ func NewApp() *App {
 	}
 }
 
+// Close закрывает каналы аудита и соединение с базой.
 func (a *App) Close() error {
 	for _, events := range a.auditChannels {
 		close(events)
@@ -113,6 +118,8 @@ func (a *App) Close() error {
 	return nil
 }
 
+// Run запускает периодическое сохранение файла и HTTP-сервер.
+// Метод блокируется, пока сервер не остановится.
 func (a *App) Run() error {
 	addr := a.cfg.Address
 	if _, port, err := net.SplitHostPort(addr); err == nil {

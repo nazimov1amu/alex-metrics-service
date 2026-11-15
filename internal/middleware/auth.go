@@ -9,24 +9,29 @@ import (
 	"net/http"
 )
 
+// BufferedResponseWriter копит статус и тело ответа, чтобы подписать их до отправки клиенту.
 type BufferedResponseWriter struct {
 	w      http.ResponseWriter
 	body   bytes.Buffer
 	status int
 }
 
+// Header возвращает заголовки исходного ResponseWriter.
 func (rw *BufferedResponseWriter) Header() http.Header {
 	return rw.w.Header()
 }
 
+// WriteHeader запоминает статус и не отправляет его, пока не вызван Commit.
 func (rw *BufferedResponseWriter) WriteHeader(status int) {
 	rw.status = status
 }
 
+// Write дописывает тело во внутренний буфер.
 func (rw *BufferedResponseWriter) Write(data []byte) (int, error) {
 	return rw.body.Write(data)
 }
 
+// Commit подписывает накопленное тело HMAC-SHA256, ставит заголовок HashSHA256 и отправляет ответ.
 func (rw *BufferedResponseWriter) Commit(key string) error {
 	mac := hmac.New(sha256.New, []byte(key))
 
@@ -43,10 +48,13 @@ func (rw *BufferedResponseWriter) Commit(key string) error {
 	return err
 }
 
+// NewBufferedResponseWriter создаёт буфер ответа поверх w.
 func NewBufferedResponseWriter(w http.ResponseWriter) *BufferedResponseWriter {
 	return &BufferedResponseWriter{w: w}
 }
 
+// AuthMiddleware проверяет заголовок HashSHA256 запроса и подписывает ответ тем же ключом.
+// Пустой key отключает проверку, и запрос проходит дальше без подписи.
 func AuthMiddleware(key string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

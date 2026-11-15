@@ -8,15 +8,18 @@ import (
 	"github.com/Alexunder2003/alex-metrics-service/internal/model"
 )
 
+// MemMetricsRepository хранит метрики в памяти процесса.
 type MemMetricsRepository struct {
 	storage map[string]model.Metrics
 	mutex   sync.Mutex
 }
 
+// NewMemMetricsRepository создаёт пустое хранилище в памяти.
 func NewMemMetricsRepository() *MemMetricsRepository {
 	return &MemMetricsRepository{storage: make(map[string]model.Metrics)}
 }
 
+// Get возвращает метрику по идентификатору или ошибку, если её нет.
 func (r *MemMetricsRepository) Get(_ context.Context, id string) (model.Metrics, error) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
@@ -37,6 +40,7 @@ func (r *MemMetricsRepository) upsertLocked(metric model.Metrics) {
 	r.storage[metric.ID] = metric
 }
 
+// Update записывает gauge поверх прежнего значения, а counter прибавляет к текущему delta.
 func (r *MemMetricsRepository) Update(_ context.Context, metric model.Metrics) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
@@ -44,6 +48,7 @@ func (r *MemMetricsRepository) Update(_ context.Context, metric model.Metrics) e
 	return nil
 }
 
+// GetBulk возвращает копию всех метрик из памяти.
 func (r *MemMetricsRepository) GetBulk(_ context.Context) ([]model.Metrics, error) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
@@ -55,6 +60,7 @@ func (r *MemMetricsRepository) GetBulk(_ context.Context) ([]model.Metrics, erro
 	return values, nil
 }
 
+// BulkUpdate сохраняет набор метрик теми же правилами, что и Update.
 func (r *MemMetricsRepository) BulkUpdate(_ context.Context, metrics []model.Metrics) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()

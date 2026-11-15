@@ -9,12 +9,15 @@ import (
 	"github.com/Alexunder2003/alex-metrics-service/internal/model"
 )
 
+// FileMetricsRepository держит метрики в памяти и сохраняет их в JSON-файл.
 type FileMetricsRepository struct {
 	mem       *MemMetricsRepository
 	path      string
 	syncWrite bool
 }
 
+// NewFileMetricsRepository создаёт файловое хранилище.
+// При restore == true метрики читаются из path. При syncWrite == true каждая запись сразу сбрасывается на диск.
 func NewFileMetricsRepository(path string, restore bool, syncWrite bool) (*FileMetricsRepository, error) {
 	repo := &FileMetricsRepository{
 		mem:       NewMemMetricsRepository(),
@@ -29,10 +32,12 @@ func NewFileMetricsRepository(path string, restore bool, syncWrite bool) (*FileM
 	return repo, nil
 }
 
+// Get возвращает метрику по идентификатору.
 func (r *FileMetricsRepository) Get(ctx context.Context, id string) (model.Metrics, error) {
 	return r.mem.Get(ctx, id)
 }
 
+// Update сохраняет метрику и при синхронном режиме сразу записывает файл.
 func (r *FileMetricsRepository) Update(ctx context.Context, metric model.Metrics) error {
 	if err := r.mem.Update(ctx, metric); err != nil {
 		return err
@@ -43,10 +48,12 @@ func (r *FileMetricsRepository) Update(ctx context.Context, metric model.Metrics
 	return nil
 }
 
+// GetBulk возвращает все метрики из памяти.
 func (r *FileMetricsRepository) GetBulk(ctx context.Context) ([]model.Metrics, error) {
 	return r.mem.GetBulk(ctx)
 }
 
+// Store сериализует текущие метрики в JSON-файл хранилища.
 func (r *FileMetricsRepository) Store() error {
 	dir := filepath.Dir(r.path)
 
@@ -112,6 +119,7 @@ func (r *FileMetricsRepository) load() error {
 	return nil
 }
 
+// BulkUpdate сохраняет набор метрик и записывает файл.
 func (r *FileMetricsRepository) BulkUpdate(ctx context.Context, metrics []model.Metrics) error {
 	if err := r.mem.BulkUpdate(ctx, metrics); err != nil {
 		return err

@@ -22,20 +22,27 @@ var (
 const retryInterval = 2 * time.Second
 const maxRetries = 3
 
+// PGErrorClassification делит ошибку PostgreSQL на повторяемую и окончательную.
 type PGErrorClassification int
 
 const (
+	// NonRetriable означает, что повтор запроса к PostgreSQL не поможет.
 	NonRetriable PGErrorClassification = iota
 
+	// Retriable означает временную ошибку PostgreSQL, запрос можно повторить.
 	Retriable
 )
 
+// PostgresErrorClassifier определяет, можно ли повторить запрос после ошибки PostgreSQL.
 type PostgresErrorClassifier struct{}
 
+// NewPostgresErrorClassifier создаёт классификатор ошибок PostgreSQL.
 func NewPostgresErrorClassifier() *PostgresErrorClassifier {
 	return &PostgresErrorClassifier{}
 }
 
+// Classify относит err к Retriable или NonRetriable.
+// Ошибка, которая не является ошибкой PostgreSQL, считается окончательной.
 func (c *PostgresErrorClassifier) Classify(err error) PGErrorClassification {
 	if err == nil {
 		return NonRetriable
@@ -49,6 +56,7 @@ func (c *PostgresErrorClassifier) Classify(err error) PGErrorClassification {
 	return NonRetriable
 }
 
+// СlassifyPgError относит код ошибки PostgreSQL к Retriable или NonRetriable.
 func СlassifyPgError(pgErr *pgconn.PgError) PGErrorClassification {
 
 	switch pgErr.Code {
@@ -90,11 +98,13 @@ func СlassifyPgError(pgErr *pgconn.PgError) PGErrorClassification {
 	return NonRetriable
 }
 
+// PostgresMetricsRepository хранит метрики в PostgreSQL и повторяет временные ошибки.
 type PostgresMetricsRepository struct {
 	db         *sql.DB
 	classifier *PostgresErrorClassifier
 }
 
+// NewPostgresMetricsRepository создаёт хранилище метрик поверх уже открытого подключения.
 func NewPostgresMetricsRepository(db *sql.DB) *PostgresMetricsRepository {
 	return &PostgresMetricsRepository{db: db, classifier: NewPostgresErrorClassifier()}
 }
@@ -110,6 +120,7 @@ func (r *PostgresMetricsRepository) withRetry(fn func() error) error {
 	return nil
 }
 
+// Update вставляет метрику или обновляет существующую строку.
 func (r *PostgresMetricsRepository) Update(ctx context.Context, metric model.Metrics) error {
 	return r.withRetry(func() error {
 		_, err := r.db.ExecContext(ctx, queryUpsertMetric, metric.ID, metric.MType, metric.Delta, metric.Value)
@@ -117,6 +128,7 @@ func (r *PostgresMetricsRepository) Update(ctx context.Context, metric model.Met
 	})
 }
 
+// Get возвращает метрику по идентификатору.
 func (r *PostgresMetricsRepository) Get(ctx context.Context, id string) (model.Metrics, error) {
 	var metric model.Metrics
 	err := r.withRetry(func() error {
@@ -126,6 +138,7 @@ func (r *PostgresMetricsRepository) Get(ctx context.Context, id string) (model.M
 	return metric, err
 }
 
+// GetBulk возвращает все метрики из PostgreSQL.
 func (r *PostgresMetricsRepository) GetBulk(ctx context.Context) ([]model.Metrics, error) {
 	var metrics []model.Metrics
 	err := r.withRetry(func() error {
@@ -148,6 +161,7 @@ func (r *PostgresMetricsRepository) GetBulk(ctx context.Context) ([]model.Metric
 	return metrics, err
 }
 
+// BulkUpdate сохраняет набор метрик в одной транзакции.
 func (r *PostgresMetricsRepository) BulkUpdate(ctx context.Context, metrics []model.Metrics) error {
 	return r.withRetry(func() error {
 		tx, err := r.db.BeginTx(ctx, nil)

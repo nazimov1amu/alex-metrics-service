@@ -9,6 +9,8 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// AgentConfig — адрес сервера, интервалы опроса и отправки, ключ подписи и лимит воркеров агента.
+// Поля заполняются из флагов, а одноимённые переменные окружения их перекрывают.
 type AgentConfig struct {
 	Address        string
 	PollInterval   int
@@ -17,6 +19,8 @@ type AgentConfig struct {
 	RateLimit      int
 }
 
+// NewAgentConfig разбирает флаги агента и переменные окружения.
+// Переменные ADDRESS, POLL_INTERVAL, REPORT_INTERVAL, KEY и RATE_LIMIT перекрывают флаги.
 func NewAgentConfig() *AgentConfig {
 	config := &AgentConfig{}
 

@@ -9,6 +9,8 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
+// Up применяет SQL-миграции из internal/db/migrations к переданной базе PostgreSQL.
+// Отсутствие новых миграций не считается ошибкой.
 func Up(db *sql.DB) error {
 	driver, err := postgres.WithInstance(db, &postgres.Config{})
 	if err != nil {

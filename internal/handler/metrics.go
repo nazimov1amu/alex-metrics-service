@@ -1,3 +1,4 @@
+// Package handler содержит HTTP-обработчики сервиса сбора метрик.
 package handler
 
 import (
@@ -20,22 +21,30 @@ var templatesFS embed.FS
 
 var metricsTmpl = template.Must(template.ParseFS(templatesFS, "templates/*.html"))
 
+// MetricsService описывает операции с метриками, которые вызывают HTTP-обработчики.
 type MetricsService interface {
+	// Update сохраняет одну метрику.
 	Update(ctx context.Context, metric *model.Metrics) error
+	// Get возвращает метрику по идентификатору.
 	Get(ctx context.Context, id string) (model.Metrics, error)
+	// GetBulk возвращает все сохранённые метрики.
 	GetBulk(ctx context.Context) ([]model.Metrics, error)
+	// BulkUpdate сохраняет набор метрик.
 	BulkUpdate(ctx context.Context, metrics []model.Metrics) error
 }
 
+// Handler обрабатывает HTTP-запросы к API метрик.
 type Handler struct {
 	svc    MetricsService
 	logger *zap.SugaredLogger
 }
 
+// NewMetricsHandler создаёт обработчик метрик поверх сервиса и логгера.
 func NewMetricsHandler(svc MetricsService, logger *zap.SugaredLogger) *Handler {
 	return &Handler{svc: svc, logger: logger}
 }
 
+// UpdateJSON обрабатывает POST /update/ и сохраняет одну метрику из JSON-тела.
 func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 	var metric model.Metrics
 
@@ -54,6 +63,7 @@ func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, metric)
 }
 
+// ValueJSON обрабатывает POST /value/ и возвращает метрику по идентификатору из JSON-тела.
 func (h *Handler) ValueJSON(w http.ResponseWriter, r *http.Request) {
 	var metric model.Metrics
 
@@ -73,6 +83,7 @@ func (h *Handler) ValueJSON(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, metric)
 }
 
+// UpdatePath обрабатывает POST /update/{type}/{name}/{value} и сохраняет метрику из пути.
 func (h *Handler) UpdatePath(w http.ResponseWriter, r *http.Request) {
 	metric, err := metricFromPath(
 		chi.URLParam(r, "type"),
@@ -100,6 +111,7 @@ func (h *Handler) UpdatePath(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ValuePath обрабатывает GET /value/{type}/{name} и возвращает значение метрики текстом.
 func (h *Handler) ValuePath(w http.ResponseWriter, r *http.Request) {
 	metric, err := h.svc.Get(r.Context(), chi.URLParam(r, "name"))
 	if err != nil {
@@ -117,6 +129,7 @@ func (h *Handler) ValuePath(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// GetBulk обрабатывает GET / и отдаёт HTML-страницу со всеми метриками.
 func (h *Handler) GetBulk(w http.ResponseWriter, r *http.Request) {
 	metrics, err := h.svc.GetBulk(r.Context())
 	if err != nil {
@@ -152,6 +165,7 @@ func metricFromPath(mType, name, raw string) (model.Metrics, error) {
 	return metric, nil
 }
 
+// BulkUpdateJSON обрабатывает POST /updates/ и сохраняет список метрик из JSON-тела.
 func (h *Handler) BulkUpdateJSON(w http.ResponseWriter, r *http.Request) {
 	var metrics []model.Metrics
 	defer r.Body.Close()

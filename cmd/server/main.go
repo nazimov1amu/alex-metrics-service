@@ -1,3 +1,4 @@
+// Command server запускает HTTP-сервер сбора метрик.
 package main
 
 import (

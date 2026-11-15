@@ -1,3 +1,4 @@
+// Package config читает флаги и переменные окружения сервера и агента.
 package config
 
 import (
@@ -9,6 +10,8 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// ServerConfig — адрес, хранилище, ключ подписи и приёмники аудита HTTP-сервера.
+// Поля заполняются из флагов, а одноимённые переменные окружения их перекрывают.
 type ServerConfig struct {
 	Address              string
 	StoreInterval        int
@@ -20,6 +23,8 @@ type ServerConfig struct {
 	AuditFileStoragePath string
 }
 
+// NewServerConfig разбирает флаги сервера и переменные окружения.
+// Переменные ADDRESS, STORE_INTERVAL, FILE_STORAGE_PATH, RESTORE, DATABASE_DSN, KEY, AUDIT_URL и AUDIT_FILE перекрывают флаги.
 func NewServerConfig() *ServerConfig {
 	config := &ServerConfig{}
 
